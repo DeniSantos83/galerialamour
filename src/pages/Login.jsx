@@ -52,7 +52,7 @@ export default function Login() {
       <div className="relative grid w-full max-w-6xl overflow-hidden rounded-[32px] border border-white/10 bg-white/5 shadow-2xl backdrop-blur xl:grid-cols-[0.95fr_1.05fr]">
         <section className="hidden xl:flex xl:flex-col xl:justify-between xl:bg-white/6 xl:p-10">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-pink-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-yellow-200">
               <Sparkles className="h-4 w-4" />
               Galeria L’Amour
             </div>
@@ -68,7 +68,7 @@ export default function Login() {
 
           <div className="grid gap-4">
             <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-              <p className="text-sm font-medium text-pink-200">Recursos</p>
+              <p className="text-sm font-medium text-yellow-200">Recursos</p>
               <ul className="mt-3 space-y-2 text-sm text-white/75">
                 <li>• QR Code por evento</li>
                 <li>• Upload de fotos e vídeos</li>
@@ -82,7 +82,7 @@ export default function Login() {
         <section className="bg-white px-6 py-8 sm:px-10 sm:py-10">
           <div className="mx-auto w-full max-w-md">
             <div className="text-center xl:text-left">
-              <p className="text-sm font-medium text-pink-600">Painel administrativo</p>
+              <p className="text-sm font-medium text-yellow-600">Painel administrativo</p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                 {mode === "login" ? "Entrar" : "Criar conta"}
               </h2>
@@ -177,7 +177,7 @@ export default function Login() {
                       setMessage("")
                       setError("")
                     }}
-                    className="font-semibold text-pink-600 transition hover:text-pink-700"
+                    className="font-semibold text-yellow-600 transition hover:text-yellow-700"
                   >
                     Criar conta
                   </button>
@@ -192,7 +192,7 @@ export default function Login() {
                       setMessage("")
                       setError("")
                     }}
-                    className="font-semibold text-pink-600 transition hover:text-pink-700"
+                    className="font-semibold text-yellow-600 transition hover:text-yellow-700"
                   >
                     Entrar
                   </button>

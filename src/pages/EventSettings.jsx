@@ -61,7 +61,7 @@ function FieldCard({ title, description, children, icon: Icon }) {
     <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-start gap-3">
         {Icon && (
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-pink-100 text-pink-700">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-yellow-100 text-yellow-700">
             <Icon className="h-5 w-5" />
           </div>
         )}
@@ -378,13 +378,13 @@ export default function EventSettings() {
             <div>
               <Link
                 to="/painel"
-                className="inline-flex items-center gap-2 text-sm font-medium text-pink-600"
+                className="inline-flex items-center gap-2 text-sm font-medium text-yellow-600"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Voltar ao painel
               </Link>
 
-              <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-700">
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
                 <Settings2 className="h-4 w-4" />
                 Configurações premium
               </div>
@@ -400,19 +400,19 @@ export default function EventSettings() {
 
             <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Visual</p>
+                <p className="text-sm font-medium text-yellow-600">Visual</p>
                 <p className="mt-2 text-2xl font-bold text-slate-900">Logo + Capa</p>
                 <p className="mt-2 text-sm text-slate-600">Identidade completa do evento</p>
               </div>
 
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Controle</p>
+                <p className="text-sm font-medium text-yellow-600">Controle</p>
                 <p className="mt-2 text-2xl font-bold text-slate-900">Upload</p>
                 <p className="mt-2 text-sm text-slate-600">Abra ou feche quando quiser</p>
               </div>
 
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Moderação</p>
+                <p className="text-sm font-medium text-yellow-600">Moderação</p>
                 <p className="mt-2 text-2xl font-bold text-slate-900">Aprovação</p>
                 <p className="mt-2 text-sm text-slate-600">Defina o comportamento da galeria</p>
               </div>

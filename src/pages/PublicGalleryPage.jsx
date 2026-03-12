@@ -218,7 +218,7 @@ export default function PublicGalleryPage() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_24%)]" />
           <div className="relative mx-auto flex min-h-[340px] max-w-7xl items-end px-6 py-10 sm:min-h-[420px] lg:px-8">
             <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-pink-200 backdrop-blur">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-yellow-200 backdrop-blur">
                 <Heart className="h-4 w-4" />
                 L’Amour Galeria
               </div>
@@ -248,7 +248,7 @@ export default function PublicGalleryPage() {
         <div className="rounded-[30px] border border-white/10 bg-white/5 p-5 shadow-sm backdrop-blur sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-pink-200">Momentos compartilhados</p>
+              <p className="text-sm font-medium text-yellow-200">Momentos compartilhados</p>
               <h2 className="mt-2 text-2xl font-bold text-white">
                 Galeria dos convidados
               </h2>

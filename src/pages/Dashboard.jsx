@@ -118,7 +118,7 @@ function EventCard({ event }) {
       <div className="grid gap-6 p-6 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-5">
           <div>
-            <p className="text-sm font-medium text-pink-600">Resumo do evento</p>
+            <p className="text-sm font-medium text-yellow-600">Resumo do evento</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <InfoChip label="Slug" value={event.slug} />
               <InfoChip label="Papel" value={event.role} />
@@ -128,7 +128,7 @@ function EventCard({ event }) {
           <div className="grid gap-4">
             <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
               <div className="flex items-center gap-2">
-                <Link2 className="h-4 w-4 text-pink-600" />
+                <Link2 className="h-4 w-4 text-yellow-600" />
                 <p className="text-sm font-semibold text-slate-900">Link público de upload</p>
               </div>
 
@@ -169,7 +169,7 @@ function EventCard({ event }) {
 
             <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
               <div className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4 text-pink-600" />
+                <ImageIcon className="h-4 w-4 text-yellow-600" />
                 <p className="text-sm font-semibold text-slate-900">Galeria privada</p>
               </div>
 
@@ -208,7 +208,7 @@ function EventCard({ event }) {
 
             <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
               <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-pink-600" />
+                <Globe className="h-4 w-4 text-yellow-600" />
                 <p className="text-sm font-semibold text-slate-900">Galeria pública</p>
               </div>
 
@@ -260,7 +260,7 @@ function EventCard({ event }) {
         </div>
 
         <div className="rounded-[28px] border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-6 text-center">
-          <div className="mx-auto flex w-fit items-center gap-2 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-700">
+          <div className="mx-auto flex w-fit items-center gap-2 rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
             <QrCode className="h-4 w-4" />
             QR Code do evento
           </div>
@@ -470,7 +470,7 @@ export default function Dashboard() {
         <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
           <div className="grid gap-8 p-6 sm:p-8 xl:grid-cols-[1.1fr_0.9fr]">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-700">
+              <div className="inline-flex items-center gap-2 rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
                 <Sparkles className="h-4 w-4" />
                 Painel premium
               </div>
@@ -500,19 +500,19 @@ export default function Dashboard() {
 
             <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Eventos</p>
+                <p className="text-sm font-medium text-yellow-600">Eventos</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{events.length}</p>
                 <p className="mt-2 text-sm text-slate-600">Eventos vinculados à sua conta</p>
               </div>
 
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Links públicos</p>
+                <p className="text-sm font-medium text-yellow-600">Links públicos</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">QR</p>
                 <p className="mt-2 text-sm text-slate-600">Prontos para compartilhar e imprimir</p>
               </div>
 
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Galerias</p>
+                <p className="text-sm font-medium text-yellow-600">Galerias</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">Live</p>
                 <p className="mt-2 text-sm text-slate-600">Privadas e públicas no mesmo sistema</p>
               </div>
@@ -523,7 +523,7 @@ export default function Dashboard() {
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <article className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <div className="mb-6">
-              <div className="inline-flex items-center gap-2 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-700">
+              <div className="inline-flex items-center gap-2 rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
                 <PlusCircle className="h-4 w-4" />
                 Novo evento
               </div>
@@ -637,7 +637,7 @@ export default function Dashboard() {
           <aside className="space-y-6">
             <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <div className="mb-5">
-                <p className="text-sm font-medium text-pink-600">Eventos cadastrados</p>
+                <p className="text-sm font-medium text-yellow-600">Eventos cadastrados</p>
                 <h2 className="mt-2 text-2xl font-bold text-slate-900">
                   Seus eventos
                 </h2>

@@ -462,7 +462,7 @@ export default function EventGalleryPage() {
         <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
           <div className="grid gap-8 p-6 sm:p-8 xl:grid-cols-[1.05fr_0.95fr]">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-700">
+              <div className="inline-flex items-center gap-2 rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
                 <Sparkles className="h-4 w-4" />
                 Galeria premium
               </div>
@@ -476,37 +476,37 @@ export default function EventGalleryPage() {
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Total</p>
+                <p className="text-sm font-medium text-yellow-600">Total</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{stats.total}</p>
                 <p className="mt-2 text-sm text-slate-600">Arquivos carregados</p>
               </div>
 
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Aprovados</p>
+                <p className="text-sm font-medium text-yellow-600">Aprovados</p>
                 <p className="mt-2 text-3xl font-bold text-emerald-700">{stats.approved}</p>
                 <p className="mt-2 text-sm text-slate-600">Prontos para exibição</p>
               </div>
 
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Pendentes</p>
+                <p className="text-sm font-medium text-yellow-600">Pendentes</p>
                 <p className="mt-2 text-3xl font-bold text-amber-700">{stats.pending}</p>
                 <p className="mt-2 text-sm text-slate-600">Aguardando moderação</p>
               </div>
 
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Fotos</p>
+                <p className="text-sm font-medium text-yellow-600">Fotos</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{stats.photos}</p>
                 <p className="mt-2 text-sm text-slate-600">Imagens do evento</p>
               </div>
 
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Vídeos</p>
+                <p className="text-sm font-medium text-yellow-600">Vídeos</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{stats.videos}</p>
                 <p className="mt-2 text-sm text-slate-600">Clipes curtos enviados</p>
               </div>
 
               <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-pink-600">Acesso</p>
+                <p className="text-sm font-medium text-yellow-600">Acesso</p>
                 <p className="mt-2 text-2xl font-bold text-slate-900 capitalize">{userRole}</p>
                 <p className="mt-2 text-sm text-slate-600">Seu papel na moderação</p>
               </div>
@@ -557,7 +557,7 @@ export default function EventGalleryPage() {
               Pendentes
             </button>
 
-            <div className="ml-auto hidden items-center gap-2 rounded-full bg-pink-100 px-3 py-2 text-sm font-medium text-pink-700 sm:inline-flex">
+            <div className="ml-auto hidden items-center gap-2 rounded-full bg-yellow-100 px-3 py-2 text-sm font-medium text-yellow-700 sm:inline-flex">
               <Shield className="h-4 w-4" />
               Moderação ativa
             </div>

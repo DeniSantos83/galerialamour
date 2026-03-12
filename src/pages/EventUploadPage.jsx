@@ -46,7 +46,7 @@ function InfoCard({ icon: Icon, title, text }) {
   return (
     <div className="rounded-[24px] border border-white/10 bg-white/8 p-4 text-white backdrop-blur">
       <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-pink-200" />
+        <Icon className="h-4 w-4 text-yellow-200" />
         <span className="text-sm font-medium">{title}</span>
       </div>
       <p className="mt-2 text-sm leading-6 text-white/75">{text}</p>
@@ -349,7 +349,7 @@ export default function EventUploadPage() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_26%)]" />
           <div className="relative mx-auto flex min-h-[360px] max-w-7xl items-end px-6 py-10 sm:min-h-[430px] lg:px-8">
             <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-pink-200 backdrop-blur">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-yellow-200 backdrop-blur">
                 <Heart className="h-4 w-4" />
                 L’Amour Galeria
               </div>
@@ -384,8 +384,8 @@ export default function EventUploadPage() {
           >
             <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-pink-200" />
-                <p className="text-sm font-medium text-pink-200">Instruções</p>
+                <Sparkles className="h-4 w-4 text-yellow-200" />
+                <p className="text-sm font-medium text-yellow-200">Instruções</p>
               </div>
               <p className="mt-3 text-sm leading-7 text-white/75">
                 {event.instructions ||
@@ -423,7 +423,7 @@ export default function EventUploadPage() {
             className="rounded-[30px] border border-white/10 bg-white p-6 text-slate-900 shadow-xl sm:p-8"
           >
             <div>
-              <p className="text-sm font-semibold text-pink-600">Envio de registros</p>
+              <p className="text-sm font-semibold text-yellow-600">Envio de registros</p>
               <h2 className="mt-2 text-2xl font-bold">Compartilhe sua foto ou vídeo</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Arquivos aceitos: JPG, PNG, WEBP, MP4, MOV e WEBM.
@@ -460,7 +460,7 @@ export default function EventUploadPage() {
                   onClick={handleSelectClick}
                   className="flex w-full flex-col items-center justify-center rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-slate-500 hover:bg-slate-100"
                 >
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-100 text-pink-700">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-yellow-100 text-yellow-700">
                     <Upload className="h-7 w-7" />
                   </div>
 
