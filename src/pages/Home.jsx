@@ -86,7 +86,7 @@ export default function Home() {
 
         <div className="relative mx-auto grid max-w-7xl gap-10 px-6 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-24">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-pink-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-yellow-200">
               <Sparkles className="h-4 w-4" />
               Galeria L'Amour
             </div>
@@ -157,7 +157,7 @@ export default function Home() {
                   alt="L'Amour Galeria"
                   className="h-14 w-auto object-contain"
                 />
-                <p className="mt-4 text-sm font-medium text-pink-600">Página de upload</p>
+                <p className="mt-4 text-sm font-medium text-yellow-600">Página de upload</p>
                 <h3 className="mt-2 text-2xl font-bold">Envie seus registros</h3>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
                   Compartilhe fotos e vídeos desse momento especial com poucos toques no celular.
@@ -170,14 +170,14 @@ export default function Home() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-sm">
-                <p className="text-sm font-medium text-pink-200">Painel do anfitrião</p>
+                <p className="text-sm font-medium text-yellow-200">Painel do anfitrião</p>
                 <p className="mt-2 text-lg font-semibold text-white">Controle total</p>
                 <p className="mt-2 text-sm leading-6 text-white/70">
                   Acompanhe uploads, aprove conteúdos e mantenha a galeria organizada.
                 </p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-sm">
-                <p className="text-sm font-medium text-pink-200">Galeria final</p>
+                <p className="text-sm font-medium text-yellow-200">Galeria final</p>
                 <p className="mt-2 text-lg font-semibold text-white">Visual premium</p>
                 <p className="mt-2 text-sm leading-6 text-white/70">
                   Uma experiência bonita para reviver a festa com os olhos dos convidados.
@@ -190,7 +190,7 @@ export default function Home() {
 
       <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
         <div className="max-w-2xl">
-          <p className="text-sm font-medium text-pink-400">Por que usar</p>
+          <p className="text-sm font-medium text-ywllow-400">Por que usar</p>
           <h2 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
             Uma forma moderna de transformar convidados em criadores de memória
           </h2>
@@ -204,7 +204,7 @@ export default function Home() {
                 key={feature.title}
                 className="rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-sm"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-100 text-pink-700">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-yellow-100 text-yellow-700">
                   <Icon className="h-6 w-6" />
                 </div>
                 <h3 className="mt-5 text-xl font-semibold text-white">
@@ -223,7 +223,7 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
             <div>
-              <p className="text-sm font-medium text-pink-400">Como funciona</p>
+              <p className="text-sm font-medium text-yellow-400">Como funciona</p>
               <h2 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
                 Do painel ao QR Code em poucos minutos
               </h2>
@@ -251,7 +251,7 @@ export default function Home() {
 
       <section id="planos" className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
         <div className="max-w-2xl">
-          <p className="text-sm font-medium text-pink-400">Planos</p>
+          <p className="text-sm font-medium text-yellow-400">Planos</p>
           <h2 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
             Estruture a oferta e comece a vender
           </h2>
@@ -278,7 +278,7 @@ export default function Home() {
                   </p>
                 </div>
                 {plan.featured && (
-                  <span className="rounded-full bg-pink-600 px-3 py-1 text-xs font-semibold text-white">
+                  <span className="rounded-full bg-yellow-600 px-3 py-1 text-xs font-semibold text-white">
                     Mais vendido
                   </span>
                 )}
@@ -290,7 +290,7 @@ export default function Home() {
                 {plan.items.map((item) => (
                   <div key={item} className="flex items-start gap-3">
                     <CheckCircle2
-                      className={`mt-0.5 h-5 w-5 ${plan.featured ? "text-pink-600" : "text-pink-300"}`}
+                      className={`mt-0.5 h-5 w-5 ${plan.featured ? "text-yellow-600" : "text-yellow-300"}`}
                     />
                     <p className={`text-sm ${plan.featured ? "text-slate-700" : "text-white/80"}`}>
                       {item}
@@ -311,7 +311,7 @@ export default function Home() {
               alt="L'Amour Galeria"
               className="h-16 w-auto object-contain"
             />
-            <p className="mt-5 text-sm font-medium text-pink-300">Pronto para vender</p>
+            <p className="mt-5 text-sm font-medium text-yellow-300">Pronto para vender</p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
               Comece a oferecer uma experiência premium para festas e eventos
             </h2>
@@ -322,7 +322,7 @@ export default function Home() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 to="/login"
-                className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 font-medium text-slate-200"
+                className="inline-flex items-center justify-center rounded-2xl bg-black px-5 py-3 font-medium text-slate-500"
               >
                 Entrar no painel
               </Link>
