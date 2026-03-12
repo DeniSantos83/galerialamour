@@ -7,6 +7,9 @@ import {
   Save,
   Settings2,
   Upload,
+  Sparkles,
+  Palette,
+  ShieldCheck,
 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { slugify } from "../lib/utils"
@@ -51,6 +54,27 @@ function buildAssetPath(slug, type, fileName) {
   const timestamp = Date.now()
   const random = Math.random().toString(36).slice(2, 8)
   return `events/${slug}/${type}/${timestamp}-${random}-${safeName}`
+}
+
+function FieldCard({ title, description, children, icon: Icon }) {
+  return (
+    <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-start gap-3">
+        {Icon && (
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-pink-100 text-pink-700">
+            <Icon className="h-5 w-5" />
+          </div>
+        )}
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          {description && (
+            <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+          )}
+        </div>
+      </div>
+      {children}
+    </div>
+  )
 }
 
 export default function EventSettings() {
@@ -172,7 +196,6 @@ export default function EventSettings() {
     if (!file) return null
 
     const currentSlug = slugify(form.name) || form.slug
-
     const path = buildAssetPath(currentSlug, type, file.name)
 
     const { error: uploadError } = await supabase.storage
@@ -211,10 +234,7 @@ export default function EventSettings() {
       setMessage("")
 
       const result = await uploadAsset(file, "logo")
-
-      if (!result?.signedUrl) {
-        throw new Error("Não foi possível gerar a URL da logo.")
-      }
+      if (!result?.signedUrl) throw new Error("Não foi possível gerar a URL da logo.")
 
       handleChange("logo_url", result.signedUrl)
       setMessage("Logo enviada com sucesso.")
@@ -235,10 +255,7 @@ export default function EventSettings() {
       setMessage("")
 
       const result = await uploadAsset(file, "cover")
-
-      if (!result?.signedUrl) {
-        throw new Error("Não foi possível gerar a URL da capa.")
-      }
+      if (!result?.signedUrl) throw new Error("Não foi possível gerar a URL da capa.")
 
       handleChange("cover_url", result.signedUrl)
       setMessage("Capa enviada com sucesso.")
@@ -354,10 +371,10 @@ export default function EventSettings() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 sm:p-6">
+    <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-[30px] bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:p-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
+          <div className="grid gap-8 p-6 sm:p-8 xl:grid-cols-[1.1fr_0.9fr]">
             <div>
               <Link
                 to="/painel"
@@ -369,332 +386,369 @@ export default function EventSettings() {
 
               <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-700">
                 <Settings2 className="h-4 w-4" />
-                Configurações do evento
+                Configurações premium
               </div>
 
-              <h1 className="mt-4 text-3xl font-bold text-slate-900 sm:text-4xl">
-                Editar evento
+              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+                Personalize seu evento com mais elegância.
               </h1>
-              <p className="mt-3 max-w-2xl text-slate-600">
-                Ajuste textos, imagens, cores e regras de upload.
+
+              <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
+                Ajuste textos, aparência, regras de upload e comportamento da galeria em uma interface mais refinada.
               </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Visual</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">Logo + Capa</p>
+                <p className="mt-2 text-sm text-slate-600">Identidade completa do evento</p>
+              </div>
+
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Controle</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">Upload</p>
+                <p className="mt-2 text-sm text-slate-600">Abra ou feche quando quiser</p>
+              </div>
+
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Moderação</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">Aprovação</p>
+                <p className="mt-2 text-sm text-slate-600">Defina o comportamento da galeria</p>
+              </div>
             </div>
           </div>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
-          <form
-            onSubmit={handleSave}
-            className="rounded-[30px] bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:p-8"
-          >
-            <div className="space-y-6">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Nome do evento
-                </label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => handleChange("name", e.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Slug atual
-                </label>
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-slate-600">
-                  {form.slug || "Sem slug"}
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Descrição
-                </label>
-                <textarea
-                  rows={4}
-                  value={form.description}
-                  onChange={(e) => handleChange("description", e.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Instruções
-                </label>
-                <textarea
-                  rows={3}
-                  value={form.instructions}
-                  onChange={(e) => handleChange("instructions", e.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                />
-              </div>
-
-              <div className="grid gap-6 sm:grid-cols-2">
+          <form onSubmit={handleSave} className="space-y-6">
+            <FieldCard
+              title="Informações principais"
+              description="Defina os dados essenciais da página pública."
+              icon={Sparkles}
+            >
+              <div className="space-y-5">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Logo do evento
+                    Nome do evento
                   </label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => handleChange("name", e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  />
+                </div>
 
-                  <label className="flex cursor-pointer items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center hover:bg-slate-100">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoChange}
-                      className="hidden"
-                    />
-                    <div>
-                      {uploadingLogo ? (
-                        <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-600" />
-                      ) : (
-                        <Upload className="mx-auto h-6 w-6 text-slate-600" />
-                      )}
-                      <p className="mt-2 text-sm font-medium text-slate-800">
-                        {uploadingLogo ? "Enviando logo..." : "Enviar logo"}
-                      </p>
-                    </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Slug atual
                   </label>
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-slate-600">
+                    {form.slug || "Sem slug"}
+                  </div>
+                </div>
 
-                  {form.logo_url && (
-                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                      <img
-                        src={form.logo_url}
-                        alt="Logo do evento"
-                        className="h-24 w-auto object-contain"
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Descrição
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={form.description}
+                    onChange={(e) => handleChange("description", e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Instruções
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={form.instructions}
+                    onChange={(e) => handleChange("instructions", e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  />
+                </div>
+              </div>
+            </FieldCard>
+
+            <FieldCard
+              title="Identidade visual"
+              description="Envie logo, capa e personalize as cores."
+              icon={Palette}
+            >
+              <div className="space-y-6">
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Logo do evento
+                    </label>
+
+                    <label className="flex cursor-pointer items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center hover:bg-slate-100">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLogoChange}
+                        className="hidden"
                       />
-                    </div>
-                  )}
-                </div>
+                      <div>
+                        {uploadingLogo ? (
+                          <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-600" />
+                        ) : (
+                          <Upload className="mx-auto h-6 w-6 text-slate-600" />
+                        )}
+                        <p className="mt-2 text-sm font-medium text-slate-800">
+                          {uploadingLogo ? "Enviando logo..." : "Enviar logo"}
+                        </p>
+                      </div>
+                    </label>
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Capa do evento
-                  </label>
+                    {form.logo_url && (
+                      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                        <img
+                          src={form.logo_url}
+                          alt="Logo do evento"
+                          className="h-24 w-auto object-contain"
+                        />
+                      </div>
+                    )}
+                  </div>
 
-                  <label className="flex cursor-pointer items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center hover:bg-slate-100">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleCoverChange}
-                      className="hidden"
-                    />
-                    <div>
-                      {uploadingCover ? (
-                        <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-600" />
-                      ) : (
-                        <ImagePlus className="mx-auto h-6 w-6 text-slate-600" />
-                      )}
-                      <p className="mt-2 text-sm font-medium text-slate-800">
-                        {uploadingCover ? "Enviando capa..." : "Enviar capa"}
-                      </p>
-                    </div>
-                  </label>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Capa do evento
+                    </label>
 
-                  {form.cover_url && (
-                    <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                      <img
-                        src={form.cover_url}
-                        alt="Capa do evento"
-                        className="h-32 w-full object-cover"
+                    <label className="flex cursor-pointer items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center hover:bg-slate-100">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCoverChange}
+                        className="hidden"
                       />
-                    </div>
-                  )}
+                      <div>
+                        {uploadingCover ? (
+                          <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-600" />
+                        ) : (
+                          <ImagePlus className="mx-auto h-6 w-6 text-slate-600" />
+                        )}
+                        <p className="mt-2 text-sm font-medium text-slate-800">
+                          {uploadingCover ? "Enviando capa..." : "Enviar capa"}
+                        </p>
+                      </div>
+                    </label>
+
+                    {form.cover_url && (
+                      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                        <img
+                          src={form.cover_url}
+                          alt="Capa do evento"
+                          className="h-32 w-full object-cover"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Cor principal
+                    </label>
+                    <input
+                      type="color"
+                      value={form.primary_color}
+                      onChange={(e) => handleChange("primary_color", e.target.value)}
+                      className="h-12 w-full rounded-xl border border-slate-300 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Cor secundária
+                    </label>
+                    <input
+                      type="color"
+                      value={form.secondary_color}
+                      onChange={(e) => handleChange("secondary_color", e.target.value)}
+                      className="h-12 w-full rounded-xl border border-slate-300 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Cor de destaque
+                    </label>
+                    <input
+                      type="color"
+                      value={form.accent_color}
+                      onChange={(e) => handleChange("accent_color", e.target.value)}
+                      className="h-12 w-full rounded-xl border border-slate-300 bg-white"
+                    />
+                  </div>
                 </div>
               </div>
+            </FieldCard>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Cor principal
-                  </label>
-                  <input
-                    type="color"
-                    value={form.primary_color}
-                    onChange={(e) => handleChange("primary_color", e.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-300 bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Cor secundária
-                  </label>
-                  <input
-                    type="color"
-                    value={form.secondary_color}
-                    onChange={(e) => handleChange("secondary_color", e.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-300 bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Cor de destaque
-                  </label>
-                  <input
-                    type="color"
-                    value={form.accent_color}
-                    onChange={(e) => handleChange("accent_color", e.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-300 bg-white"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
-                  <span>
-                    <span className="block font-medium text-slate-900">Upload aberto</span>
-                    <span className="mt-1 block text-sm text-slate-500">
-                      Permite que convidados enviem arquivos.
+            <FieldCard
+              title="Regras e moderação"
+              description="Controle uploads, vídeos e modo da galeria."
+              icon={ShieldCheck}
+            >
+              <div className="space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
+                    <span>
+                      <span className="block font-medium text-slate-900">Upload aberto</span>
+                      <span className="mt-1 block text-sm text-slate-500">
+                        Permite que convidados enviem arquivos.
+                      </span>
                     </span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={form.is_upload_open}
-                    onChange={(e) => handleChange("is_upload_open", e.target.checked)}
-                    className="h-5 w-5"
-                  />
-                </label>
+                    <input
+                      type="checkbox"
+                      checked={form.is_upload_open}
+                      onChange={(e) => handleChange("is_upload_open", e.target.checked)}
+                      className="h-5 w-5"
+                    />
+                  </label>
 
-                <label className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
-                  <span>
-                    <span className="block font-medium text-slate-900">Permitir vídeos</span>
-                    <span className="mt-1 block text-sm text-slate-500">
-                      Aceitar ou bloquear vídeos no evento.
+                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
+                    <span>
+                      <span className="block font-medium text-slate-900">Permitir vídeos</span>
+                      <span className="mt-1 block text-sm text-slate-500">
+                        Aceitar ou bloquear vídeos no evento.
+                      </span>
                     </span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={form.allow_videos}
-                    onChange={(e) => handleChange("allow_videos", e.target.checked)}
-                    className="h-5 w-5"
-                  />
-                </label>
+                    <input
+                      type="checkbox"
+                      checked={form.allow_videos}
+                      onChange={(e) => handleChange("allow_videos", e.target.checked)}
+                      className="h-5 w-5"
+                    />
+                  </label>
 
-                <label className="flex items-center justify-between rounded-2xl border border-slate-200 p-4 sm:col-span-2">
-                  <span>
-                    <span className="block font-medium text-slate-900">Exigir nome do convidado</span>
-                    <span className="mt-1 block text-sm text-slate-500">
-                      Obriga a informar nome antes do upload.
+                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 p-4 sm:col-span-2">
+                    <span>
+                      <span className="block font-medium text-slate-900">Exigir nome do convidado</span>
+                      <span className="mt-1 block text-sm text-slate-500">
+                        Obriga a informar nome antes do upload.
+                      </span>
                     </span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={form.require_guest_name}
-                    onChange={(e) => handleChange("require_guest_name", e.target.checked)}
-                    className="h-5 w-5"
-                  />
-                </label>
-              </div>
+                    <input
+                      type="checkbox"
+                      checked={form.require_guest_name}
+                      onChange={(e) => handleChange("require_guest_name", e.target.checked)}
+                      className="h-5 w-5"
+                    />
+                  </label>
+                </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Máx. foto (MB)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={form.max_photo_size_mb}
+                      onChange={(e) => handleChange("max_photo_size_mb", e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Máx. vídeo (MB)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={form.max_video_size_mb}
+                      onChange={(e) => handleChange("max_video_size_mb", e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Duração vídeo (s)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={form.max_video_duration_seconds}
+                      onChange={(e) =>
+                        handleChange("max_video_duration_seconds", e.target.value)
+                      }
+                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Máx. foto (MB)
+                    Modo da galeria
                   </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.max_photo_size_mb}
-                    onChange={(e) => handleChange("max_photo_size_mb", e.target.value)}
+                  <select
+                    value={form.gallery_mode}
+                    onChange={(e) => handleChange("gallery_mode", e.target.value)}
                     className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Máx. vídeo (MB)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.max_video_size_mb}
-                    onChange={(e) => handleChange("max_video_size_mb", e.target.value)}
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Duração vídeo (s)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.max_video_duration_seconds}
-                    onChange={(e) =>
-                      handleChange("max_video_duration_seconds", e.target.value)
-                    }
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                  />
+                  >
+                    <option value="private">Aprovar automaticamente</option>
+                    <option value="approved_only">Entrar como pendente</option>
+                  </select>
                 </div>
               </div>
+            </FieldCard>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Modo da galeria
-                </label>
-                <select
-                  value={form.gallery_mode}
-                  onChange={(e) => handleChange("gallery_mode", e.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                >
-                  <option value="private">Aprovar automaticamente</option>
-                  <option value="approved_only">Entrar como pendente</option>
-                </select>
-              </div>
-
-              {(error || message) && (
-                <div
-                  className={`rounded-2xl px-4 py-3 text-sm ${
-                    error
-                      ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
-                      : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-                  }`}
-                >
-                  {error || message}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 font-medium text-white"
+            {(error || message) && (
+              <div
+                className={`rounded-2xl px-4 py-3 text-sm ${
+                  error
+                    ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
+                    : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                }`}
               >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Salvar alterações
-                  </>
-                )}
-              </button>
-            </div>
+                {error || message}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 font-medium text-white"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Salvar alterações
+                </>
+              )}
+            </button>
           </form>
 
-          <aside className="space-y-6">
-            <section className="overflow-hidden rounded-[30px] bg-white shadow-sm ring-1 ring-slate-200">
+          <aside>
+            <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
               {form.cover_url ? (
                 <img
                   src={form.cover_url}
                   alt="Capa do evento"
-                  className="h-48 w-full object-cover"
+                  className="h-52 w-full object-cover"
                 />
               ) : (
-                <div className="h-48 w-full" style={previewStyles} />
+                <div className="h-52 w-full" style={previewStyles} />
               )}
 
-              <div
-                className="p-6"
-                style={!form.cover_url ? previewStyles : undefined}
-              >
+              <div className="p-6" style={!form.cover_url ? previewStyles : undefined}>
                 {form.logo_url && (
                   <img
                     src={form.logo_url}
@@ -720,14 +774,30 @@ export default function EventSettings() {
                   </p>
                 </div>
 
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <p className="text-sm font-medium text-slate-800">Upload</p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {form.is_upload_open ? "Aberto para convidados" : "Fechado no momento"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <p className="text-sm font-medium text-slate-800">Vídeos</p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {form.allow_videos
+                        ? `Permitidos até ${form.max_video_duration_seconds}s`
+                        : "Desativados"}
+                    </p>
+                  </div>
+                </div>
+
                 <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
                   Novo slug ao salvar:{" "}
-                  <span className="font-semibold">
-                    {slugify(form.name) || "sem-slug"}
-                  </span>
+                  <span className="font-semibold">{slugify(form.name) || "sem-slug"}</span>
                 </div>
               </div>
-            </section>
+            </div>
           </aside>
         </section>
       </div>

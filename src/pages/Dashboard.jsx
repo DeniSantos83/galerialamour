@@ -12,6 +12,9 @@ import {
   Settings2,
   Download,
   Globe,
+  Sparkles,
+  Link2,
+  LayoutDashboard,
 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { slugify } from "../lib/utils"
@@ -23,6 +26,26 @@ const initialForm = {
   secondary_color: "#ffffff",
   accent_color: "#ec4899",
   instructions: "Envie fotos e vídeos de até 45 segundos.",
+}
+
+function InfoChip({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-slate-900">{value}</p>
+    </div>
+  )
+}
+
+function ActionButton({ children, className = "", ...props }) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition ${className}`}
+    >
+      {children}
+    </button>
+  )
 }
 
 function EventCard({ event }) {
@@ -61,19 +84,27 @@ function EventCard({ event }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
       <div
-        className="p-6"
+        className="relative overflow-hidden p-6"
         style={{
           background: `linear-gradient(135deg, ${event.primary_color} 0%, ${event.accent_color} 100%)`,
         }}
       >
-        <div className="flex items-start justify-between gap-4">
-          <div className="max-w-xl">
-            <p className="text-sm font-medium text-white/80">Evento</p>
-            <h3 className="mt-2 text-2xl font-bold text-white">{event.name}</h3>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_30%)]" />
 
-            <p className="mt-3 text-sm leading-6 text-white/85">
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-white backdrop-blur">
+              <Sparkles className="h-3.5 w-3.5" />
+              Evento ativo
+            </div>
+
+            <h3 className="mt-4 text-2xl font-bold text-white sm:text-3xl">
+              {event.name}
+            </h3>
+
+            <p className="mt-3 max-w-xl text-sm leading-6 text-white/85">
               {event.description || "Sem descrição cadastrada."}
             </p>
           </div>
@@ -84,140 +115,151 @@ function EventCard({ event }) {
         </div>
       </div>
 
-      <div className="grid gap-6 p-6 lg:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-6 p-6 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-5">
           <div>
-            <p className="text-sm font-medium text-pink-600">Resumo</p>
+            <p className="text-sm font-medium text-pink-600">Resumo do evento</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Slug</p>
-                <p className="mt-2 font-semibold text-slate-900">{event.slug}</p>
-              </div>
-
-              <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Papel</p>
-                <p className="mt-2 font-semibold capitalize text-slate-900">
-                  {event.role}
-                </p>
-              </div>
+              <InfoChip label="Slug" value={event.slug} />
+              <InfoChip label="Papel" value={event.role} />
             </div>
           </div>
 
-          <div className="rounded-3xl bg-slate-50 p-5 ring-1 ring-slate-200">
-            <p className="text-sm font-semibold text-slate-900">Link público de upload</p>
-            <p className="mt-2 break-all text-sm text-slate-600">{uploadUrl}</p>
+          <div className="grid gap-4">
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+              <div className="flex items-center gap-2">
+                <Link2 className="h-4 w-4 text-pink-600" />
+                <p className="text-sm font-semibold text-slate-900">Link público de upload</p>
+              </div>
 
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => handleCopy(uploadUrl, "upload")}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white"
-              >
-                {copiedField === "upload" ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    Copiado
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" />
-                    Copiar link
-                  </>
-                )}
-              </button>
+              <p className="mt-3 break-all text-sm leading-6 text-slate-600">
+                {uploadUrl}
+              </p>
 
-              <a
-                href={uploadUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Abrir página
-              </a>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <ActionButton
+                  type="button"
+                  onClick={() => handleCopy(uploadUrl, "upload")}
+                  className="bg-slate-900 text-white"
+                >
+                  {copiedField === "upload" ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Copiado
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4" />
+                      Copiar link
+                    </>
+                  )}
+                </ActionButton>
+
+                <a
+                  href={uploadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Abrir página
+                </a>
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-3xl bg-slate-50 p-5 ring-1 ring-slate-200">
-            <p className="text-sm font-semibold text-slate-900">Galeria privada</p>
-            <p className="mt-2 break-all text-sm text-slate-600">{privateGalleryUrl}</p>
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-pink-600" />
+                <p className="text-sm font-semibold text-slate-900">Galeria privada</p>
+              </div>
 
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => handleCopy(privateGalleryUrl, "private-gallery")}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white"
-              >
-                {copiedField === "private-gallery" ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    Copiado
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" />
-                    Copiar galeria privada
-                  </>
-                )}
-              </button>
+              <p className="mt-3 break-all text-sm leading-6 text-slate-600">
+                {privateGalleryUrl}
+              </p>
 
+              <div className="mt-4 flex flex-wrap gap-3">
+                <ActionButton
+                  type="button"
+                  onClick={() => handleCopy(privateGalleryUrl, "private-gallery")}
+                  className="bg-slate-900 text-white"
+                >
+                  {copiedField === "private-gallery" ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Copiado
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4" />
+                      Copiar galeria privada
+                    </>
+                  )}
+                </ActionButton>
+
+                <Link
+                  to={`/evento/${event.slug}/galeria`}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  Ver galeria
+                </Link>
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4 text-pink-600" />
+                <p className="text-sm font-semibold text-slate-900">Galeria pública</p>
+              </div>
+
+              <p className="mt-3 break-all text-sm leading-6 text-slate-600">
+                {publicGalleryUrl}
+              </p>
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <ActionButton
+                  type="button"
+                  onClick={() => handleCopy(publicGalleryUrl, "public-gallery")}
+                  className="bg-slate-900 text-white"
+                >
+                  {copiedField === "public-gallery" ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Copiado
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4" />
+                      Copiar galeria pública
+                    </>
+                  )}
+                </ActionButton>
+
+                <a
+                  href={publicGalleryUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Abrir pública
+                </a>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
               <Link
-                to={`/evento/${event.slug}/galeria`}
+                to={`/evento/${event.slug}/configuracoes`}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
               >
-                <ImageIcon className="h-4 w-4" />
-                Ver galeria
+                <Settings2 className="h-4 w-4" />
+                Editar evento
               </Link>
             </div>
           </div>
-
-          <div className="rounded-3xl bg-slate-50 p-5 ring-1 ring-slate-200">
-            <p className="text-sm font-semibold text-slate-900">Galeria pública</p>
-            <p className="mt-2 break-all text-sm text-slate-600">{publicGalleryUrl}</p>
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => handleCopy(publicGalleryUrl, "public-gallery")}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white"
-              >
-                {copiedField === "public-gallery" ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    Copiado
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" />
-                    Copiar galeria pública
-                  </>
-                )}
-              </button>
-
-              <a
-                href={publicGalleryUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
-              >
-                <Globe className="h-4 w-4" />
-                Abrir pública
-              </a>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Link
-              to={`/evento/${event.slug}/configuracoes`}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
-            >
-              <Settings2 className="h-4 w-4" />
-              Editar evento
-            </Link>
-          </div>
         </div>
 
-        <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-6 text-center">
+        <div className="rounded-[28px] border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-6 text-center">
           <div className="mx-auto flex w-fit items-center gap-2 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-700">
             <QrCode className="h-4 w-4" />
             QR Code do evento
@@ -238,14 +280,14 @@ function EventCard({ event }) {
           </div>
 
           <p className="mx-auto mt-4 max-w-xs text-sm leading-6 text-slate-600">
-            Esse QR Code pode ser colocado nas mesas para que os convidados enviem fotos e vídeos direto do celular.
+            Use esse QR Code nas mesas, convites ou materiais impressos para coletar fotos e vídeos dos convidados.
           </p>
 
           <div className="mt-5 flex flex-col gap-3">
-            <button
+            <ActionButton
               type="button"
               onClick={() => handleCopy(uploadUrl, "qr")}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white"
+              className="justify-center bg-slate-900 text-white"
             >
               {copiedField === "qr" ? (
                 <>
@@ -258,7 +300,7 @@ function EventCard({ event }) {
                   Copiar link do QR
                 </>
               )}
-            </button>
+            </ActionButton>
 
             {qrCodeUrl && (
               <a
@@ -421,33 +463,65 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 sm:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-[30px] bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:p-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <main className="relative min-h-screen overflow-hidden bg-slate-100 p-4 sm:p-6">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.08),transparent_20%),radial-gradient(circle_at_left,rgba(15,23,42,0.05),transparent_18%)]" />
+
+      <div className="relative mx-auto max-w-7xl space-y-6">
+        <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
+          <div className="grid gap-8 p-6 sm:p-8 xl:grid-cols-[1.1fr_0.9fr]">
             <div>
-              <p className="text-sm font-medium text-pink-600">Painel FestaLens</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900 sm:text-4xl">
-                Seus eventos
+              <div className="inline-flex items-center gap-2 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-700">
+                <Sparkles className="h-4 w-4" />
+                Painel premium
+              </div>
+
+              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+                Gerencie seus eventos com uma experiência mais refinada.
               </h1>
-              <p className="mt-3 max-w-2xl text-slate-600">
-                Crie páginas personalizadas para receber fotos e vídeos dos convidados por QR Code e acompanhe tudo em uma galeria privada.
+
+              <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
+                Crie páginas personalizadas, gere QR Codes, acompanhe galerias e transforme a experiência dos convidados em uma entrega elegante e profissional.
               </p>
-              <p className="mt-3 text-sm text-slate-500">Logado como: {user.email}</p>
+
+              <p className="mt-5 text-sm text-slate-500">
+                Logado como: {user.email}
+              </p>
+
+              <div className="mt-6">
+                <button
+                  onClick={handleLogout}
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sair
+                </button>
+              </div>
             </div>
 
-            <button
-              onClick={handleLogout}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white"
-            >
-              <LogOut className="h-4 w-4" />
-              Sair
-            </button>
+            <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Eventos</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">{events.length}</p>
+                <p className="mt-2 text-sm text-slate-600">Eventos vinculados à sua conta</p>
+              </div>
+
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Links públicos</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">QR</p>
+                <p className="mt-2 text-sm text-slate-600">Prontos para compartilhar e imprimir</p>
+              </div>
+
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Galerias</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">Live</p>
+                <p className="mt-2 text-sm text-slate-600">Privadas e públicas no mesmo sistema</p>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-          <article className="rounded-[30px] bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:p-8">
+        <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <article className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <div className="mb-6">
               <div className="inline-flex items-center gap-2 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-700">
                 <PlusCircle className="h-4 w-4" />
@@ -458,7 +532,7 @@ export default function Dashboard() {
                 Criar evento
               </h2>
               <p className="mt-2 text-slate-600">
-                Defina o nome, descrição e as cores principais da página pública do evento.
+                Defina nome, descrição, identidade visual e inicie um novo fluxo de coleta para seus convidados.
               </p>
             </div>
 
@@ -561,12 +635,15 @@ export default function Dashboard() {
           </article>
 
           <aside className="space-y-6">
-            <section className="rounded-[30px] bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:p-8">
+            <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <div className="mb-5">
                 <p className="text-sm font-medium text-pink-600">Eventos cadastrados</p>
                 <h2 className="mt-2 text-2xl font-bold text-slate-900">
                   Seus eventos
                 </h2>
+                <p className="mt-2 text-slate-600">
+                  Acesse QR Codes, links públicos e configurações em um só lugar.
+                </p>
               </div>
 
               {loadingEvents ? (

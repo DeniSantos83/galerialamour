@@ -1,5 +1,13 @@
 import { Link } from "react-router-dom"
-import { Camera, QrCode, ShieldCheck, Images, Sparkles, CheckCircle2 } from "lucide-react"
+import {
+  Camera,
+  QrCode,
+  ShieldCheck,
+  Images,
+  Sparkles,
+  CheckCircle2,
+} from "lucide-react"
+import logo from "../assets/logo.png"
 
 const features = [
   {
@@ -72,59 +80,67 @@ const plans = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <section className="relative overflow-hidden border-b border-slate-200 bg-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.12),transparent_30%),radial-gradient(circle_at_left,rgba(15,23,42,0.08),transparent_25%)]" />
+    <main className="min-h-screen bg-slate-950 text-slate-900">
+      <section className="relative overflow-hidden border-b border-white/10 bg-slate-950">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.16),transparent_22%),radial-gradient(circle_at_left,rgba(255,255,255,0.06),transparent_18%),radial-gradient(circle_at_bottom,rgba(168,85,247,0.12),transparent_22%)]" />
 
         <div className="relative mx-auto grid max-w-7xl gap-10 px-6 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-24">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-pink-200">
               <Sparkles className="h-4 w-4" />
-              Galeria L'Amour
+              Plataforma para eventos
             </div>
 
-            <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
+            <div className="mt-6">
+              <img
+                src={logo}
+                alt="L'Amour Galeria"
+                className="h-24 w-auto object-contain sm:h-28"
+              />
+            </div>
+
+            <h1 className="mt-8 text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
               A festa pelos olhos dos convidados.
             </h1>
 
-            <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
+            <p className="mt-6 max-w-xl text-lg leading-8 text-white/70">
               Receba fotos e vídeos por QR Code, personalize a experiência de cada evento e organize tudo em uma galeria bonita, moderna e fácil de compartilhar.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 to="/login"
-                className="inline-flex items-center justify-center rounded-2xl bg-red-300 px-5 py-3 font-medium text-white shadow-sm transition hover:opacity-90"
+                className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 font-medium text-slate-900 shadow-sm transition hover:opacity-90"
               >
                 Entrar no painel
               </Link>
 
               <a
                 href="#planos"
-                className="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 font-medium text-slate-900 transition hover:bg-slate-50"
+                className="inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-5 py-3 font-medium text-white transition hover:bg-white/15"
               >
                 Ver planos
               </a>
             </div>
 
             <div className="mt-10 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                <p className="text-2xl font-bold text-slate-900">QR</p>
-                <p className="mt-1 text-sm text-slate-600">Upload rápido nas mesas</p>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-2xl font-bold text-white">QR</p>
+                <p className="mt-1 text-sm text-white/65">Upload rápido nas mesas</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                <p className="text-2xl font-bold text-slate-900">Fotos</p>
-                <p className="mt-1 text-sm text-slate-600">Registros espontâneos</p>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-2xl font-bold text-white">Fotos</p>
+                <p className="mt-1 text-sm text-white/65">Registros espontâneos</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                <p className="text-2xl font-bold text-slate-900">Vídeos</p>
-                <p className="mt-1 text-sm text-slate-600">Momentos curtos e reais</p>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-2xl font-bold text-white">Vídeos</p>
+                <p className="mt-1 text-sm text-white/65">Momentos curtos e reais</p>
               </div>
             </div>
           </div>
 
           <div className="grid gap-4 self-center">
-            <div className="rounded-[32px] bg-slate-900 p-6 text-white shadow-xl">
+            <div className="rounded-[32px] border border-white/10 bg-white/6 p-6 text-white shadow-xl backdrop-blur">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-white/10 p-3">
                   <Camera className="h-6 w-6" />
@@ -136,7 +152,12 @@ export default function Home() {
               </div>
 
               <div className="mt-6 rounded-[28px] bg-white p-5 text-slate-900">
-                <p className="text-sm font-medium text-red-600">Página de upload</p>
+                <img
+                  src={logo}
+                  alt="L'Amour Galeria"
+                  className="h-14 w-auto object-contain"
+                />
+                <p className="mt-4 text-sm font-medium text-pink-600">Página de upload</p>
                 <h3 className="mt-2 text-2xl font-bold">Envie seus registros</h3>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
                   Compartilhe fotos e vídeos desse momento especial com poucos toques no celular.
@@ -148,17 +169,17 @@ export default function Home() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                <p className="text-sm font-medium text-red-600">Painel do anfitrião</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">Controle total</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-sm">
+                <p className="text-sm font-medium text-pink-200">Painel do anfitrião</p>
+                <p className="mt-2 text-lg font-semibold text-white">Controle total</p>
+                <p className="mt-2 text-sm leading-6 text-white/70">
                   Acompanhe uploads, aprove conteúdos e mantenha a galeria organizada.
                 </p>
               </div>
-              <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                <p className="text-sm font-medium text-red-600">Galeria final</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">Visual premium</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-sm">
+                <p className="text-sm font-medium text-pink-200">Galeria final</p>
+                <p className="mt-2 text-lg font-semibold text-white">Visual premium</p>
+                <p className="mt-2 text-sm leading-6 text-white/70">
                   Uma experiência bonita para reviver a festa com os olhos dos convidados.
                 </p>
               </div>
@@ -169,8 +190,8 @@ export default function Home() {
 
       <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
         <div className="max-w-2xl">
-          <p className="text-sm font-medium text-red-600">Por que usar</p>
-          <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          <p className="text-sm font-medium text-pink-400">Por que usar</p>
+          <h2 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
             Uma forma moderna de transformar convidados em criadores de memória
           </h2>
         </div>
@@ -181,15 +202,15 @@ export default function Home() {
             return (
               <article
                 key={feature.title}
-                className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200"
+                className="rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-sm"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-700">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-100 text-pink-700">
                   <Icon className="h-6 w-6" />
                 </div>
-                <h3 className="mt-5 text-xl font-semibold text-slate-900">
+                <h3 className="mt-5 text-xl font-semibold text-white">
                   {feature.title}
                 </h3>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
+                <p className="mt-3 text-sm leading-7 text-white/70">
                   {feature.description}
                 </p>
               </article>
@@ -198,15 +219,15 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="border-y border-slate-200 bg-white">
+      <section className="border-y border-white/10 bg-white/5">
         <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
             <div>
-              <p className="text-sm font-medium text-red-600">Como funciona</p>
-              <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              <p className="text-sm font-medium text-pink-400">Como funciona</p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
                 Do painel ao QR Code em poucos minutos
               </h2>
-              <p className="mt-4 max-w-lg text-slate-600">
+              <p className="mt-4 max-w-lg text-white/70">
                 O processo foi pensado para ser simples para quem organiza e intuitivo para quem participa.
               </p>
             </div>
@@ -215,12 +236,12 @@ export default function Home() {
               {steps.map((step, index) => (
                 <div
                   key={step}
-                  className="flex gap-4 rounded-3xl bg-slate-50 p-5 ring-1 ring-slate-200"
+                  className="flex gap-4 rounded-3xl border border-white/10 bg-white/5 p-5"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold text-slate-900">
                     {index + 1}
                   </div>
-                  <p className="pt-2 text-sm font-medium text-slate-700">{step}</p>
+                  <p className="pt-2 text-sm font-medium text-white/80">{step}</p>
                 </div>
               ))}
             </div>
@@ -230,11 +251,11 @@ export default function Home() {
 
       <section id="planos" className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
         <div className="max-w-2xl">
-          <p className="text-sm font-medium text-red-600">Planos</p>
-          <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          <p className="text-sm font-medium text-pink-400">Planos</p>
+          <h2 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
             Estruture a oferta e comece a vender
           </h2>
-          <p className="mt-4 text-slate-600">
+          <p className="mt-4 text-white/70">
             Você pode adaptar estes valores à sua realidade local e ao tipo de evento atendido.
           </p>
         </div>
@@ -245,19 +266,19 @@ export default function Home() {
               key={plan.name}
               className={`rounded-[30px] p-6 shadow-sm ring-1 ${
                 plan.featured
-                  ? "bg-slate-900 text-white ring-slate-900"
-                  : "bg-white text-slate-900 ring-slate-200"
+                  ? "bg-white text-slate-900 ring-white"
+                  : "bg-white/5 text-white ring-white/10"
               }`}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-2xl font-bold">{plan.name}</h3>
-                  <p className={`mt-2 text-sm ${plan.featured ? "text-white/75" : "text-slate-600"}`}>
+                  <p className={`mt-2 text-sm ${plan.featured ? "text-slate-600" : "text-white/70"}`}>
                     {plan.description}
                   </p>
                 </div>
                 {plan.featured && (
-                  <span className="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">
+                  <span className="rounded-full bg-pink-600 px-3 py-1 text-xs font-semibold text-white">
                     Mais vendido
                   </span>
                 )}
@@ -268,8 +289,10 @@ export default function Home() {
               <div className="mt-6 space-y-3">
                 {plan.items.map((item) => (
                   <div key={item} className="flex items-start gap-3">
-                    <CheckCircle2 className={`mt-0.5 h-5 w-5 ${plan.featured ? "text-red-300" : "text-red-600"}`} />
-                    <p className={`text-sm ${plan.featured ? "text-white/85" : "text-slate-700"}`}>
+                    <CheckCircle2
+                      className={`mt-0.5 h-5 w-5 ${plan.featured ? "text-pink-600" : "text-pink-300"}`}
+                    />
+                    <p className={`text-sm ${plan.featured ? "text-slate-700" : "text-white/80"}`}>
                       {item}
                     </p>
                   </div>
@@ -280,10 +303,15 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="bg-slate-900">
+      <section className="border-t border-white/10 bg-black/20">
         <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
           <div className="rounded-[32px] border border-white/10 bg-white/5 p-8 text-white backdrop-blur sm:p-10">
-            <p className="text-sm font-medium text-red-400">Pronto para vender</p>
+            <img
+              src={logo}
+              alt="L'Amour Galeria"
+              className="h-16 w-auto object-contain"
+            />
+            <p className="mt-5 text-sm font-medium text-pink-300">Pronto para vender</p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
               Comece a oferecer uma experiência premium para festas e eventos
             </h2>
@@ -294,7 +322,7 @@ export default function Home() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 to="/login"
-                className="inline-flex items-center justify-center rounded-2xl bg-black px-5 py-3 font-medium text-slate-900 shadow-sm"
+                className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 font-medium text-slate-900"
               >
                 Entrar no painel
               </Link>

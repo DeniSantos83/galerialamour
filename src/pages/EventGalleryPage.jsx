@@ -13,6 +13,9 @@ import {
   Clock3,
   CheckCircle2,
   XCircle,
+  Sparkles,
+  Shield,
+  Images,
 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { formatBytes } from "../lib/utils"
@@ -67,7 +70,7 @@ function MediaCard({
       layout
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200"
+      className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
     >
       <button
         type="button"
@@ -316,10 +319,6 @@ export default function EventGalleryPage() {
             item.file_path
           )
 
-          if (signedError) {
-            console.error("Erro ao gerar signed URL:", item.file_path, signedError)
-          }
-
           return {
             ...item,
             signedUrl: signedError ? null : signedData?.signedUrl || null,
@@ -377,11 +376,7 @@ export default function EventGalleryPage() {
     }
 
     setItems((prev) => prev.filter((media) => media.id !== item.id))
-
-    if (selectedItem?.id === item.id) {
-      setSelectedItem(null)
-    }
-
+    if (selectedItem?.id === item.id) setSelectedItem(null)
     setDeletingId(null)
   }
 
@@ -395,6 +390,12 @@ export default function EventGalleryPage() {
 
     if (error) {
       alert(error.message || "Erro ao atualizar status.")
+      setUpdatingId(null)
+      return
+    }
+
+    if (status === "rejected") {
+      setItems((prev) => prev.filter((media) => media.id !== item.id))
       setUpdatingId(null)
       return
     }
@@ -418,7 +419,6 @@ export default function EventGalleryPage() {
 
   function handleReject(item) {
     updateStatus(item, "rejected")
-    setItems((prev) => prev.filter((media) => media.id !== item.id))
   }
 
   if (loadingUser) {
@@ -457,46 +457,64 @@ export default function EventGalleryPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 sm:p-6">
+    <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-[30px] bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
+          <div className="grid gap-8 p-6 sm:p-8 xl:grid-cols-[1.05fr_0.95fr]">
             <div>
-              <p className="text-sm font-medium text-pink-600">Galeria privada</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900 sm:text-4xl">
+              <div className="inline-flex items-center gap-2 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-700">
+                <Sparkles className="h-4 w-4" />
+                Galeria premium
+              </div>
+              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl">
                 {event?.name}
               </h1>
-              <p className="mt-3 max-w-2xl text-slate-600">
-                Visualize os registros enviados pelos convidados, aprove ou remova conteúdos e mantenha a galeria organizada.
+              <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
+                Visualize os registros enviados pelos convidados, aprove ou remova conteúdos e mantenha a galeria organizada com um fluxo mais elegante.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-center ring-1 ring-slate-200">
-                <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Total</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">{stats.total}</p>
+                <p className="mt-2 text-sm text-slate-600">Arquivos carregados</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-center ring-1 ring-slate-200">
-                <p className="text-2xl font-bold text-slate-900">{stats.photos}</p>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Fotos</p>
+
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Aprovados</p>
+                <p className="mt-2 text-3xl font-bold text-emerald-700">{stats.approved}</p>
+                <p className="mt-2 text-sm text-slate-600">Prontos para exibição</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-center ring-1 ring-slate-200">
-                <p className="text-2xl font-bold text-slate-900">{stats.videos}</p>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Vídeos</p>
+
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Pendentes</p>
+                <p className="mt-2 text-3xl font-bold text-amber-700">{stats.pending}</p>
+                <p className="mt-2 text-sm text-slate-600">Aguardando moderação</p>
               </div>
-              <div className="rounded-2xl bg-amber-50 px-4 py-3 text-center ring-1 ring-amber-200">
-                <p className="text-2xl font-bold text-amber-700">{stats.pending}</p>
-                <p className="text-xs uppercase tracking-wide text-amber-600">Pendentes</p>
+
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Fotos</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">{stats.photos}</p>
+                <p className="mt-2 text-sm text-slate-600">Imagens do evento</p>
               </div>
-              <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-center ring-1 ring-emerald-200">
-                <p className="text-2xl font-bold text-emerald-700">{stats.approved}</p>
-                <p className="text-xs uppercase tracking-wide text-emerald-600">Aprovados</p>
+
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Vídeos</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">{stats.videos}</p>
+                <p className="mt-2 text-sm text-slate-600">Clipes curtos enviados</p>
+              </div>
+
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-pink-600">Acesso</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900 capitalize">{userRole}</p>
+                <p className="mt-2 text-sm text-slate-600">Seu papel na moderação</p>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="rounded-[30px] bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
+        <section className="rounded-[30px] border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="flex flex-wrap items-center gap-3">
             <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
               <Filter className="h-4 w-4" />
@@ -538,12 +556,18 @@ export default function EventGalleryPage() {
             >
               Pendentes
             </button>
+
+            <div className="ml-auto hidden items-center gap-2 rounded-full bg-pink-100 px-3 py-2 text-sm font-medium text-pink-700 sm:inline-flex">
+              <Shield className="h-4 w-4" />
+              Moderação ativa
+            </div>
           </div>
         </section>
 
         {filteredItems.length === 0 ? (
-          <section className="rounded-[30px] bg-white p-10 text-center shadow-sm ring-1 ring-slate-200">
-            <p className="text-lg font-semibold text-slate-900">
+          <section className="rounded-[30px] border border-slate-200 bg-white p-10 text-center shadow-sm">
+            <Images className="mx-auto h-10 w-10 text-slate-400" />
+            <p className="mt-4 text-lg font-semibold text-slate-900">
               Nenhum arquivo neste filtro
             </p>
             <p className="mt-2 text-slate-600">
