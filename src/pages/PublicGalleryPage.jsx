@@ -3,11 +3,12 @@ import { useParams } from "react-router-dom"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   X,
-  Image as ImageIcon,
   Video,
   Loader2,
   Camera,
   PlayCircle,
+  Heart,
+  Images,
 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 
@@ -69,7 +70,7 @@ function MediaCard({ item, onOpen }) {
       layout
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group overflow-hidden rounded-[26px] bg-white shadow-sm ring-1 ring-slate-200"
+      className="group overflow-hidden rounded-[28px] border border-white/10 bg-white/6 shadow-sm backdrop-blur"
     >
       <button
         type="button"
@@ -175,10 +176,10 @@ export default function PublicGalleryPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
         <div className="text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-600" />
-          <p className="mt-3 text-slate-600">Carregando galeria...</p>
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-white/70" />
+          <p className="mt-3 text-white/70">Carregando galeria...</p>
         </div>
       </main>
     )
@@ -186,10 +187,10 @@ export default function PublicGalleryPage() {
 
   if (!event) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <div className="w-full max-w-lg rounded-[28px] bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
-          <h1 className="text-2xl font-bold text-slate-900">Galeria não encontrada</h1>
-          <p className="mt-3 text-slate-600">
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
+        <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-white/5 p-8 text-center shadow-sm backdrop-blur">
+          <h1 className="text-2xl font-bold text-white">Galeria não encontrada</h1>
+          <p className="mt-3 text-white/70">
             Não foi possível localizar esse evento.
           </p>
         </div>
@@ -198,14 +199,14 @@ export default function PublicGalleryPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-slate-950 text-white">
       <section className="relative overflow-hidden">
         <div
-          className="relative min-h-[320px] sm:min-h-[380px]"
+          className="relative min-h-[340px] sm:min-h-[420px]"
           style={
             event.cover_url
               ? {
-                  backgroundImage: `linear-gradient(rgba(15,23,42,0.45), rgba(15,23,42,0.65)), url(${event.cover_url})`,
+                  backgroundImage: `linear-gradient(rgba(15,23,42,0.48), rgba(15,23,42,0.72)), url(${event.cover_url})`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                 }
@@ -214,27 +215,29 @@ export default function PublicGalleryPage() {
                 }
           }
         >
-          <div className="mx-auto flex min-h-[320px] max-w-7xl items-end px-6 py-10 sm:min-h-[380px] lg:px-8">
-            <div className="max-w-3xl text-white">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_24%)]" />
+          <div className="relative mx-auto flex min-h-[340px] max-w-7xl items-end px-6 py-10 sm:min-h-[420px] lg:px-8">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-pink-200 backdrop-blur">
+                <Heart className="h-4 w-4" />
+                L’Amour Galeria
+              </div>
+
               {event.logo_url && (
                 <img
                   src={event.logo_url}
                   alt={`Logo de ${event.name}`}
-                  className="mb-5 h-16 w-auto max-w-[180px] object-contain sm:h-20"
+                  className="mb-5 mt-5 h-16 w-auto max-w-[180px] object-contain sm:h-20"
                 />
               )}
 
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
-                <Camera className="h-4 w-4" />
-                Galeria pública do evento
-              </div>
-
-              <h1 className="mt-5 text-4xl font-bold tracking-tight sm:text-5xl">
+              <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
                 {event.name}
               </h1>
 
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-white/85 sm:text-base">
-                {event.description || "Reviva esse momento por diferentes olhares e registros."}
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-white/80 sm:text-base">
+                {event.description ||
+                  "Reviva esse momento por diferentes olhares, registros e emoções."}
               </p>
             </div>
           </div>
@@ -242,38 +245,42 @@ export default function PublicGalleryPage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+        <div className="rounded-[30px] border border-white/10 bg-white/5 p-5 shadow-sm backdrop-blur sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-pink-600">Momentos compartilhados</p>
-              <h2 className="mt-2 text-2xl font-bold text-slate-900">
+              <p className="text-sm font-medium text-pink-200">Momentos compartilhados</p>
+              <h2 className="mt-2 text-2xl font-bold text-white">
                 Galeria dos convidados
               </h2>
+              <p className="mt-2 text-sm leading-6 text-white/65">
+                Uma curadoria visual dos registros aprovados desse evento.
+              </p>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-center ring-1 ring-slate-200">
-                <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+                <p className="text-2xl font-bold text-white">{stats.total}</p>
+                <p className="text-xs uppercase tracking-wide text-white/60">Total</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-center ring-1 ring-slate-200">
-                <p className="text-2xl font-bold text-slate-900">{stats.photos}</p>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Fotos</p>
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+                <p className="text-2xl font-bold text-white">{stats.photos}</p>
+                <p className="text-xs uppercase tracking-wide text-white/60">Fotos</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-center ring-1 ring-slate-200">
-                <p className="text-2xl font-bold text-slate-900">{stats.videos}</p>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Vídeos</p>
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+                <p className="text-2xl font-bold text-white">{stats.videos}</p>
+                <p className="text-xs uppercase tracking-wide text-white/60">Vídeos</p>
               </div>
             </div>
           </div>
         </div>
 
         {items.length === 0 ? (
-          <section className="mt-6 rounded-[28px] bg-white p-10 text-center shadow-sm ring-1 ring-slate-200">
-            <p className="text-lg font-semibold text-slate-900">
+          <section className="mt-6 rounded-[30px] border border-white/10 bg-white/5 p-10 text-center shadow-sm backdrop-blur">
+            <Images className="mx-auto h-10 w-10 text-white/45" />
+            <p className="mt-4 text-lg font-semibold text-white">
               Ainda não há arquivos aprovados
             </p>
-            <p className="mt-2 text-slate-600">
+            <p className="mt-2 text-white/65">
               Assim que houver fotos ou vídeos liberados, eles aparecerão aqui.
             </p>
           </section>

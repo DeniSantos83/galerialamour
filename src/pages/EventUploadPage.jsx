@@ -8,6 +8,8 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Sparkles,
+  Heart,
 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import {
@@ -38,6 +40,18 @@ function buildStoragePath(slug, fileName) {
   const timestamp = Date.now()
   const random = Math.random().toString(36).slice(2, 8)
   return `events/${slug}/uploads/${timestamp}-${random}-${safeName}`
+}
+
+function InfoCard({ icon: Icon, title, text }) {
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-white/8 p-4 text-white backdrop-blur">
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-pink-200" />
+        <span className="text-sm font-medium">{title}</span>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-white/75">{text}</p>
+    </div>
+  )
 }
 
 export default function EventUploadPage() {
@@ -220,12 +234,11 @@ export default function EventUploadPage() {
       })
 
     if (storageError) {
-  console.error("ERRO STORAGE:", storageError)
-  setMessage(`STORAGE: ${storageError.message || "Falha ao enviar o arquivo."}`)
-  setMessageType("error")
-  setUploading(false)
-  return
-}
+      setMessage(storageError.message || "Falha ao enviar o arquivo.")
+      setMessageType("error")
+      setUploading(false)
+      return
+    }
 
     let durationSeconds = null
 
@@ -270,14 +283,13 @@ export default function EventUploadPage() {
       })
 
     if (insertError) {
-  console.error("ERRO BANCO:", insertError)
-  setMessage(
-    `BANCO: ${insertError.message || "Arquivo enviado, mas houve erro ao registrar no banco."}`
-  )
-  setMessageType("error")
-  setUploading(false)
-  return
-}
+      setMessage(
+        insertError.message || "Arquivo enviado, mas houve erro ao registrar no banco."
+      )
+      setMessageType("error")
+      setUploading(false)
+      return
+    }
 
     setMessage("Arquivo enviado com sucesso. Obrigado por compartilhar esse momento.")
     setMessageType("success")
@@ -294,10 +306,10 @@ export default function EventUploadPage() {
 
   if (loadingPage) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
         <div className="text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-600" />
-          <p className="mt-3 text-slate-600">Carregando evento...</p>
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-white/70" />
+          <p className="mt-3 text-white/70">Carregando evento...</p>
         </div>
       </main>
     )
@@ -305,13 +317,11 @@ export default function EventUploadPage() {
 
   if (pageError || !event) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
-        <div className="w-full max-w-lg rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
-          <AlertCircle className="mx-auto h-10 w-10 text-rose-500" />
-          <h1 className="mt-4 text-2xl font-bold text-slate-900">
-            Evento indisponível
-          </h1>
-          <p className="mt-3 text-slate-600">
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
+        <div className="w-full max-w-lg rounded-[30px] border border-white/10 bg-white/5 p-8 text-center shadow-sm backdrop-blur">
+          <AlertCircle className="mx-auto h-10 w-10 text-rose-400" />
+          <h1 className="mt-4 text-2xl font-bold text-white">Evento indisponível</h1>
+          <p className="mt-3 text-white/70">
             {pageError || "Não foi possível carregar a página."}
           </p>
         </div>
@@ -320,237 +330,216 @@ export default function EventUploadPage() {
   }
 
   return (
-    <main
-      className="min-h-screen px-4 py-8 sm:px-6"
-      style={{
-        background: `linear-gradient(180deg, ${theme.secondary} 0%, #f8fafc 100%)`,
-      }}
-    >
-      <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <motion.section
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="overflow-hidden rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200"
-        >
-          <div
-            className="relative min-h-[240px] px-6 py-8 sm:px-8"
-            style={
-              event?.cover_url
-            ? {
-               backgroundImage: `linear-gradient(rgba(15,23,42,0.45), rgba(15,23,42,0.55)), url(${event.cover_url})`,
-               backgroundSize: "cover",
-               backgroundPosition: "center",
-              }
-            : { backgroundColor: theme.primary }
+    <main className="min-h-screen bg-slate-950 text-white">
+      <section className="relative overflow-hidden">
+        <div
+          className="relative min-h-[360px] sm:min-h-[430px]"
+          style={
+            event?.cover_url
+              ? {
+                  backgroundImage: `linear-gradient(rgba(15,23,42,0.5), rgba(15,23,42,0.72)), url(${event.cover_url})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }
+              : {
+                  background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.accent} 100%)`,
+                }
           }
-          >
-            <div className="relative z-10 max-w-xl text-white">
-            <div
-              className="inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em]"
-              style={{ backgroundColor: theme.accent, color: theme.secondary }}
-            >
-              Envie seus registros
-            </div>
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_26%)]" />
+          <div className="relative mx-auto flex min-h-[360px] max-w-7xl items-end px-6 py-10 sm:min-h-[430px] lg:px-8">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-pink-200 backdrop-blur">
+                <Heart className="h-4 w-4" />
+                L’Amour Galeria
+              </div>
 
               {event.logo_url && (
                 <img
-                    src={event.logo_url}
-                    alt={`Logo de ${event.name}`}
-                    className="mb-4 mt-4 h-16 w-auto max-w-[180px] object-contain"
+                  src={event.logo_url}
+                  alt={`Logo de ${event.name}`}
+                  className="mb-4 mt-5 h-16 w-auto max-w-[180px] object-contain sm:h-20"
                 />
               )}
 
-            <h1 className="mt-5 text-3xl font-bold leading-tight sm:text-4xl">
-            {event.name}
-            </h1>
+              <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+                {event.name}
+              </h1>
 
-  <p className="mt-4 text-sm/6 text-white/80 sm:text-base/7">
-    {event.description || "Compartilhe fotos e vídeos desse momento especial."}
-  </p>
-</div>
-
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_40%)]" />
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-white/80 sm:text-base">
+                {event.description ||
+                  "Compartilhe fotos e vídeos desse momento especial com poucos toques."}
+              </p>
+            </div>
           </div>
+        </div>
+      </section>
 
-          <div className="p-6 sm:p-8">
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <p className="text-sm font-semibold text-slate-800">Instruções</p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
+          <motion.section
+            initial={{ opacity: 0, y: 22 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-5"
+          >
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-pink-200" />
+                <p className="text-sm font-medium text-pink-200">Instruções</p>
+              </div>
+              <p className="mt-3 text-sm leading-7 text-white/75">
                 {event.instructions ||
                   "Selecione uma foto ou vídeo e envie com poucos toques."}
               </p>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <div className="flex items-center gap-2 text-slate-800">
-                  <ImageIcon className="h-4 w-4" />
-                  <span className="text-sm font-medium">Fotos</span>
-                </div>
-                <p className="mt-2 text-sm text-slate-600">
-                  Até {settings?.max_photo_size_mb ?? 20} MB
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <div className="flex items-center gap-2 text-slate-800">
-                  <Video className="h-4 w-4" />
-                  <span className="text-sm font-medium">Vídeos</span>
-                </div>
-                <p className="mt-2 text-sm text-slate-600">
-                  {settings?.allow_videos === false
-                    ? "Desativado"
-                    : `Até ${settings?.max_video_duration_seconds ?? 45}s`}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <div className="flex items-center gap-2 text-slate-800">
-                  <Upload className="h-4 w-4" />
-                  <span className="text-sm font-medium">Envio rápido</span>
-                </div>
-                <p className="mt-2 text-sm text-slate-600">
-                  Feito direto do celular
-                </p>
-              </div>
-            </div>
-          </div>
-        </motion.section>
-
-        <motion.section
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:p-8"
-        >
-          <div>
-            <p className="text-sm font-semibold" style={{ color: theme.accent }}>
-              Área de upload
-            </p>
-            <h2 className="mt-2 text-2xl font-bold text-slate-900">
-              Compartilhe sua foto ou vídeo
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Arquivos aceitos: JPG, PNG, WEBP, MP4, MOV e WEBM.
-            </p>
-          </div>
-
-          <div className="mt-6 space-y-5">
-            {settings?.require_guest_name && (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Seu nome
-                </label>
-                <input
-                  type="text"
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="Digite seu nome"
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                />
-              </div>
-            )}
-
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
-                onChange={handleFileChange}
-                className="hidden"
+            <div className="grid gap-4 sm:grid-cols-3">
+              <InfoCard
+                icon={ImageIcon}
+                title="Fotos"
+                text={`Até ${settings?.max_photo_size_mb ?? 20} MB`}
               />
+              <InfoCard
+                icon={Video}
+                title="Vídeos"
+                text={
+                  settings?.allow_videos === false
+                    ? "Desativado"
+                    : `Até ${settings?.max_video_duration_seconds ?? 45}s`
+                }
+              />
+              <InfoCard
+                icon={Upload}
+                title="Envio rápido"
+                text="Feito direto do celular, sem complicação."
+              />
+            </div>
+          </motion.section>
+
+          <motion.section
+            initial={{ opacity: 0, y: 22 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.06 }}
+            className="rounded-[30px] border border-white/10 bg-white p-6 text-slate-900 shadow-xl sm:p-8"
+          >
+            <div>
+              <p className="text-sm font-semibold text-pink-600">Envio de registros</p>
+              <h2 className="mt-2 text-2xl font-bold">Compartilhe sua foto ou vídeo</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Arquivos aceitos: JPG, PNG, WEBP, MP4, MOV e WEBM.
+              </p>
+            </div>
+
+            <div className="mt-6 space-y-5">
+              {settings?.require_guest_name && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Seu nome
+                  </label>
+                  <input
+                    type="text"
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="Digite seu nome"
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  />
+                </div>
+              )}
+
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={handleSelectClick}
+                  className="flex w-full flex-col items-center justify-center rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-slate-500 hover:bg-slate-100"
+                >
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-100 text-pink-700">
+                    <Upload className="h-7 w-7" />
+                  </div>
+
+                  <h3 className="mt-4 text-lg font-semibold text-slate-900">
+                    Selecionar arquivo
+                  </h3>
+
+                  <p className="mt-2 max-w-sm text-sm leading-6 text-slate-600">
+                    Toque aqui para escolher uma foto ou vídeo da sua galeria.
+                  </p>
+                </button>
+              </div>
+
+              {selectedFile && (
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900/8 text-slate-900">
+                      {selectedCategory === "image" ? (
+                        <ImageIcon className="h-5 w-5" />
+                      ) : (
+                        <Video className="h-5 w-5" />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {selectedFile.name}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {selectedCategory === "image" ? "Foto" : "Vídeo"} ·{" "}
+                        {formatBytes(selectedFile.size)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {message && (
+                <div
+                  className={`rounded-2xl border px-4 py-3 text-sm ${
+                    messageType === "success"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : messageType === "error"
+                      ? "border-rose-200 bg-rose-50 text-rose-700"
+                      : "border-slate-200 bg-slate-50 text-slate-700"
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    {messageType === "success" ? (
+                      <CheckCircle2 className="mt-0.5 h-4 w-4" />
+                    ) : messageType === "error" ? (
+                      <AlertCircle className="mt-0.5 h-4 w-4" />
+                    ) : null}
+                    <span>{message}</span>
+                  </div>
+                </div>
+              )}
 
               <button
                 type="button"
-                onClick={handleSelectClick}
-                className="flex w-full flex-col items-center justify-center rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-slate-500 hover:bg-slate-100"
+                onClick={handleUpload}
+                disabled={uploading || !event.is_upload_open}
+                className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3.5 font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <div
-                  className="flex h-14 w-14 items-center justify-center rounded-2xl"
-                  style={{ backgroundColor: `${theme.accent}20`, color: theme.accent }}
-                >
-                  <Upload className="h-7 w-7" />
-                </div>
-
-                <h3 className="mt-4 text-lg font-semibold text-slate-900">
-                  Selecionar arquivo
-                </h3>
-
-                <p className="mt-2 max-w-sm text-sm leading-6 text-slate-600">
-                  Toque aqui para escolher uma foto ou vídeo da sua galeria.
-                </p>
+                {uploading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Enviando arquivo...
+                  </span>
+                ) : event.is_upload_open ? (
+                  "Enviar agora"
+                ) : (
+                  "Envios encerrados"
+                )}
               </button>
             </div>
-
-            {selectedFile && (
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-start gap-3">
-                  <div
-                    className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: `${theme.primary}12`, color: theme.primary }}
-                  >
-                    {selectedCategory === "image" ? (
-                      <ImageIcon className="h-5 w-5" />
-                    ) : (
-                      <Video className="h-5 w-5" />
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-900">
-                      {selectedFile.name}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {selectedCategory === "image" ? "Foto" : "Vídeo"} ·{" "}
-                      {formatBytes(selectedFile.size)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {message && (
-              <div
-                className={`rounded-2xl border px-4 py-3 text-sm ${
-                  messageType === "success"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : messageType === "error"
-                    ? "border-rose-200 bg-rose-50 text-rose-700"
-                    : "border-slate-200 bg-slate-50 text-slate-700"
-                }`}
-              >
-                <div className="flex items-start gap-2">
-                  {messageType === "success" ? (
-                    <CheckCircle2 className="mt-0.5 h-4 w-4" />
-                  ) : messageType === "error" ? (
-                    <AlertCircle className="mt-0.5 h-4 w-4" />
-                  ) : null}
-                  <span>{message}</span>
-                </div>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={handleUpload}
-              disabled={uploading || !event.is_upload_open}
-              className="inline-flex w-full items-center justify-center rounded-2xl px-5 py-3.5 font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ backgroundColor: theme.primary }}
-            >
-              {uploading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Enviando arquivo...
-                </span>
-              ) : event.is_upload_open ? (
-                "Enviar agora"
-              ) : (
-                "Envios encerrados"
-              )}
-            </button>
-          </div>
-        </motion.section>
-      </div>
+          </motion.section>
+        </div>
+      </section>
     </main>
   )
 }

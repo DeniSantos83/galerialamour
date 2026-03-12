@@ -88,7 +88,7 @@ export default function Home() {
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-pink-200">
               <Sparkles className="h-4 w-4" />
-              Plataforma para eventos
+              Galeria L'Amour
             </div>
 
             <div className="mt-6">
@@ -117,7 +117,7 @@ export default function Home() {
 
               <a
                 href="#planos"
-                className="inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-5 py-3 font-medium text-white transition hover:bg-white/15"
+                className="inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white/30 px-5 py-3 font-medium text-white transition hover:bg-white/15"
               >
                 Ver planos
               </a>
