@@ -117,7 +117,7 @@ export default function Home() {
 
               <a
                 href="#planos"
-                className="inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white/30 px-5 py-3 font-medium text-white transition hover:bg-white/15"
+                className="inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white/100 px-5 py-3 font-medium text-white transition hover:bg-white/15"
               >
                 Ver planos
               </a>
@@ -322,7 +322,7 @@ export default function Home() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 to="/login"
-                className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 font-medium text-slate-900"
+                className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 font-medium text-slate-200"
               >
                 Entrar no painel
               </Link>
