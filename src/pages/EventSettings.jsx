@@ -1,806 +1,1105 @@
-import { useEffect, useMemo, useState } from "react"
-import { Link, Navigate, useParams } from "react-router-dom"
+import { useEffect, useMemo, useState } from "react";
+import { Link, Navigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
-  ImagePlus,
-  Loader2,
+  CalendarDays,
+  Camera,
+  CheckCircle2,
+  Image as ImageIcon,
+  Lock,
   Save,
-  Settings2,
-  Upload,
-  Sparkles,
-  Palette,
-  ShieldCheck,
-} from "lucide-react"
-import { supabase } from "../lib/supabase"
-import { slugify } from "../lib/utils"
+  Settings,
+  Shield,
+  Video,
+  UserCircle2,
+  LogOut,
+} from "lucide-react";
+import { supabase } from "../lib/supabase";
 
-const initialState = {
-  id: "",
-  name: "",
-  slug: "",
-  description: "",
-  instructions: "",
-  logo_url: "",
-  cover_url: "",
-  primary_color: "#111827",
-  secondary_color: "#ffffff",
-  accent_color: "#ec4899",
-  is_upload_open: true,
+const defaultSettings = {
   allow_videos: true,
   max_photo_size_mb: 20,
   max_video_size_mb: 80,
   max_video_duration_seconds: 45,
   require_guest_name: false,
   gallery_mode: "private",
-}
-
-function sanitizeFileName(name = "arquivo") {
-  const parts = name.split(".")
-  const ext = parts.length > 1 ? parts.pop() : "bin"
-  const base = parts
-    .join(".")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9-_]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase()
-
-  return `${base || "arquivo"}.${ext.toLowerCase()}`
-}
-
-function buildAssetPath(slug, type, fileName) {
-  const safeName = sanitizeFileName(fileName)
-  const timestamp = Date.now()
-  const random = Math.random().toString(36).slice(2, 8)
-  return `events/${slug}/${type}/${timestamp}-${random}-${safeName}`
-}
-
-function FieldCard({ title, description, children, icon: Icon }) {
-  return (
-    <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-start gap-3">
-        {Icon && (
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-yellow-100 text-yellow-700">
-            <Icon className="h-5 w-5" />
-          </div>
-        )}
-        <div>
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-          {description && (
-            <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
-          )}
-        </div>
-      </div>
-      {children}
-    </div>
-  )
-}
+};
 
 export default function EventSettings() {
-  const { slug } = useParams()
+  const { slug } = useParams();
 
-  const [user, setUser] = useState(null)
-  const [loadingUser, setLoadingUser] = useState(true)
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState(initialState)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [uploadingLogo, setUploadingLogo] = useState(false)
-  const [uploadingCover, setUploadingCover] = useState(false)
-  const [error, setError] = useState("")
-  const [message, setMessage] = useState("")
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
 
-  useEffect(() => {
-    async function loadUser() {
-      const { data } = await supabase.auth.getUser()
-      setUser(data?.user ?? null)
-      setLoadingUser(false)
+  const [eventData, setEventData] = useState(null);
+  const [settingsId, setSettingsId] = useState(null);
+
+  const [form, setForm] = useState(defaultSettings);
+  const [message, setMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const baseUrl =
+    typeof window !== "undefined" ? window.location.origin : "";
+
+  const previewLinks = useMemo(() => {
+    if (!eventData?.slug) {
+      return {
+        uploadUrl: "",
+        privateGalleryUrl: "",
+        publicGalleryUrl: "",
+      };
     }
 
-    loadUser()
-  }, [])
+    return {
+      uploadUrl: `${baseUrl}/evento/${eventData.slug}/upload`,
+      privateGalleryUrl: `${baseUrl}/evento/${eventData.slug}/galeria`,
+      publicGalleryUrl: `${baseUrl}/galeria/${eventData.slug}`,
+    };
+  }, [eventData, baseUrl]);
 
   useEffect(() => {
-    if (!user) return
+    loadPage();
+  }, [slug]);
 
-    async function loadEvent() {
-      setLoading(true)
-      setError("")
-      setMessage("")
+  async function loadPage() {
+    try {
+      setAuthLoading(true);
+      setLoading(true);
+      setMessage("");
+      setErrorMessage("");
 
-      const { data: relations, error: relationError } = await supabase
-        .from("event_users")
-        .select("event_id, role")
-        .eq("user_id", user.id)
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-      if (relationError) {
-        setError(relationError.message || "Erro ao validar acesso.")
-        setLoading(false)
-        return
+      if (authError) throw authError;
+
+      if (!authUser) {
+        setUser(null);
+        setProfile(null);
+        setEventData(null);
+        return;
       }
 
-      const { data: eventData, error: eventError } = await supabase
+      setUser(authUser);
+
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", authUser.id)
+        .maybeSingle();
+
+      if (profileError) throw profileError;
+
+      setProfile(profileData || null);
+
+      const { data: foundEvent, error: eventError } = await supabase
         .from("events")
         .select("*")
         .eq("slug", slug)
-        .single()
+        .maybeSingle();
 
-      if (eventError || !eventData) {
-        setError("Evento não encontrado.")
-        setLoading(false)
-        return
+      if (eventError) throw eventError;
+
+      if (!foundEvent) {
+        setEventData(null);
+        setErrorMessage("Evento não encontrado.");
+        return;
       }
 
-      const relation = relations?.find((r) => r.event_id === eventData.id)
+      setEventData(foundEvent);
 
-      if (!relation || !["owner", "editor"].includes(relation.role)) {
-        setError("Você não tem permissão para editar este evento.")
-        setLoading(false)
-        return
+      const isAdmin = profileData?.role === "admin";
+      const isOwner = foundEvent.created_by === authUser.id;
+      const isPartner = foundEvent.partner_id === authUser.id;
+
+      if (!isAdmin && !isOwner && !isPartner) {
+        setErrorMessage("Você não tem permissão para acessar este evento.");
+        return;
       }
 
-      const { data: settingsData, error: settingsError } = await supabase
+      const { data: foundSettings, error: settingsError } = await supabase
         .from("event_settings")
         .select("*")
-        .eq("event_id", eventData.id)
-        .single()
+        .eq("event_id", foundEvent.id)
+        .maybeSingle();
 
-      if (settingsError || !settingsData) {
-        setError("Não foi possível carregar as configurações do evento.")
-        setLoading(false)
-        return
+      if (settingsError) throw settingsError;
+
+      if (foundSettings) {
+        setSettingsId(foundSettings.id);
+        setForm({
+          allow_videos:
+            typeof foundSettings.allow_videos === "boolean"
+              ? foundSettings.allow_videos
+              : defaultSettings.allow_videos,
+          max_photo_size_mb:
+            foundSettings.max_photo_size_mb ?? defaultSettings.max_photo_size_mb,
+          max_video_size_mb:
+            foundSettings.max_video_size_mb ?? defaultSettings.max_video_size_mb,
+          max_video_duration_seconds:
+            foundSettings.max_video_duration_seconds ??
+            defaultSettings.max_video_duration_seconds,
+          require_guest_name:
+            typeof foundSettings.require_guest_name === "boolean"
+              ? foundSettings.require_guest_name
+              : defaultSettings.require_guest_name,
+          gallery_mode:
+            foundSettings.gallery_mode || defaultSettings.gallery_mode,
+        });
+      } else {
+        const payload = {
+          event_id: foundEvent.id,
+          ...defaultSettings,
+        };
+
+        const { data: createdSettings, error: createError } = await supabase
+          .from("event_settings")
+          .upsert(payload, { onConflict: "event_id" })
+          .select("*")
+          .single();
+
+        if (createError) throw createError;
+
+        setSettingsId(createdSettings.id);
+        setForm({
+          allow_videos: createdSettings.allow_videos,
+          max_photo_size_mb: createdSettings.max_photo_size_mb,
+          max_video_size_mb: createdSettings.max_video_size_mb,
+          max_video_duration_seconds:
+            createdSettings.max_video_duration_seconds,
+          require_guest_name: createdSettings.require_guest_name,
+          gallery_mode: createdSettings.gallery_mode,
+        });
       }
-
-      setForm({
-        id: eventData.id,
-        name: eventData.name || "",
-        slug: eventData.slug || "",
-        description: eventData.description || "",
-        instructions: eventData.instructions || "",
-        logo_url: eventData.logo_url || "",
-        cover_url: eventData.cover_url || "",
-        primary_color: eventData.primary_color || "#111827",
-        secondary_color: eventData.secondary_color || "#ffffff",
-        accent_color: eventData.accent_color || "#ec4899",
-        is_upload_open: eventData.is_upload_open ?? true,
-        allow_videos: settingsData.allow_videos ?? true,
-        max_photo_size_mb: settingsData.max_photo_size_mb ?? 20,
-        max_video_size_mb: settingsData.max_video_size_mb ?? 80,
-        max_video_duration_seconds: settingsData.max_video_duration_seconds ?? 45,
-        require_guest_name: settingsData.require_guest_name ?? false,
-        gallery_mode: settingsData.gallery_mode || "private",
-      })
-
-      setLoading(false)
+    } catch (error) {
+      console.error("Erro ao carregar configurações do evento:", error);
+      setErrorMessage(
+        error?.message || "Não foi possível carregar as configurações do evento."
+      );
+    } finally {
+      setAuthLoading(false);
+      setLoading(false);
     }
+  }
 
-    loadEvent()
-  }, [slug, user])
+  function handleChange(event) {
+    const { name, value, type, checked } = event.target;
 
-  const previewStyles = useMemo(() => {
-    return {
-      background: `linear-gradient(135deg, ${form.primary_color} 0%, ${form.accent_color} 100%)`,
-      color: form.secondary_color,
-    }
-  }, [form.primary_color, form.accent_color, form.secondary_color])
-
-  function handleChange(field, value) {
     setForm((prev) => ({
       ...prev,
-      [field]: value,
-    }))
-  }
-
-  async function uploadAsset(file, type) {
-    if (!file) return null
-
-    const currentSlug = slugify(form.name) || form.slug
-    const path = buildAssetPath(currentSlug, type, file.name)
-
-    const { error: uploadError } = await supabase.storage
-      .from("event-media")
-      .upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: file.type,
-      })
-
-    if (uploadError) {
-      throw new Error(uploadError.message || `Erro ao enviar ${type}.`)
-    }
-
-    const { data, error } = await supabase.storage
-      .from("event-media")
-      .createSignedUrl(path, 60 * 60 * 24 * 30)
-
-    if (error) {
-      throw new Error(error.message || `Erro ao gerar URL da ${type}.`)
-    }
-
-    return {
-      path,
-      signedUrl: data?.signedUrl || "",
-    }
-  }
-
-  async function handleLogoChange(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    try {
-      setUploadingLogo(true)
-      setError("")
-      setMessage("")
-
-      const result = await uploadAsset(file, "logo")
-      if (!result?.signedUrl) throw new Error("Não foi possível gerar a URL da logo.")
-
-      handleChange("logo_url", result.signedUrl)
-      setMessage("Logo enviada com sucesso.")
-    } catch (err) {
-      setError(err.message || "Erro ao enviar logo.")
-    } finally {
-      setUploadingLogo(false)
-    }
-  }
-
-  async function handleCoverChange(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    try {
-      setUploadingCover(true)
-      setError("")
-      setMessage("")
-
-      const result = await uploadAsset(file, "cover")
-      if (!result?.signedUrl) throw new Error("Não foi possível gerar a URL da capa.")
-
-      handleChange("cover_url", result.signedUrl)
-      setMessage("Capa enviada com sucesso.")
-    } catch (err) {
-      setError(err.message || "Erro ao enviar capa.")
-    } finally {
-      setUploadingCover(false)
-    }
+      [name]:
+        type === "checkbox"
+          ? checked
+          : name === "max_photo_size_mb" ||
+            name === "max_video_size_mb" ||
+            name === "max_video_duration_seconds"
+          ? Number(value)
+          : value,
+    }));
   }
 
   async function handleSave(e) {
-    e.preventDefault()
-    setSaving(true)
-    setError("")
-    setMessage("")
+    e.preventDefault();
 
-    const newSlug = slugify(form.name)
-
-    if (!form.name.trim()) {
-      setError("Informe o nome do evento.")
-      setSaving(false)
-      return
+    if (!eventData?.id) {
+      setErrorMessage("Evento inválido.");
+      return;
     }
 
-    const { error: eventError } = await supabase
-      .from("events")
-      .update({
-        name: form.name.trim(),
-        slug: newSlug,
-        description: form.description.trim() || null,
-        instructions: form.instructions.trim() || null,
-        logo_url: form.logo_url || null,
-        cover_url: form.cover_url || null,
-        primary_color: form.primary_color,
-        secondary_color: form.secondary_color,
-        accent_color: form.accent_color,
-        is_upload_open: form.is_upload_open,
-      })
-      .eq("id", form.id)
-
-    if (eventError) {
-      setError(eventError.message || "Erro ao atualizar o evento.")
-      setSaving(false)
-      return
+    if (form.max_photo_size_mb < 1) {
+      setErrorMessage("O tamanho máximo de foto deve ser maior que zero.");
+      return;
     }
 
-    const { error: settingsError } = await supabase
-      .from("event_settings")
-      .update({
+    if (form.allow_videos) {
+      if (form.max_video_size_mb < 1) {
+        setErrorMessage("O tamanho máximo de vídeo deve ser maior que zero.");
+        return;
+      }
+
+      if (form.max_video_duration_seconds < 1) {
+        setErrorMessage("A duração máxima do vídeo deve ser maior que zero.");
+        return;
+      }
+    }
+
+    try {
+      setSaving(true);
+      setMessage("");
+      setErrorMessage("");
+
+      const payload = {
+        event_id: eventData.id,
         allow_videos: form.allow_videos,
         max_photo_size_mb: Number(form.max_photo_size_mb),
         max_video_size_mb: Number(form.max_video_size_mb),
         max_video_duration_seconds: Number(form.max_video_duration_seconds),
         require_guest_name: form.require_guest_name,
         gallery_mode: form.gallery_mode,
-      })
-      .eq("event_id", form.id)
+      };
 
-    if (settingsError) {
-      setError(settingsError.message || "Erro ao atualizar configurações.")
-      setSaving(false)
-      return
+      const { data, error } = await supabase
+        .from("event_settings")
+        .upsert(payload, { onConflict: "event_id" })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setSettingsId(data.id);
+      setMessage("Configurações salvas com sucesso.");
+    } catch (error) {
+      console.error("Erro ao salvar configurações:", error);
+      setErrorMessage(
+        error?.message || "Não foi possível salvar as configurações."
+      );
+    } finally {
+      setSaving(false);
     }
-
-    setForm((prev) => ({
-      ...prev,
-      slug: newSlug,
-    }))
-
-    setMessage("Evento atualizado com sucesso.")
-    setSaving(false)
   }
 
-  if (loadingUser) {
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
+  function formatDate(dateValue) {
+    if (!dateValue) return "Sem data";
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return "Sem data";
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }
+
+  if (authLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <p className="text-slate-600">Carregando...</p>
-      </main>
-    )
+      <div style={styles.loadingScreen}>
+        <div style={styles.loadingCard}>
+          <div style={styles.logoBadge}>
+            <Settings size={24} />
+          </div>
+          <h2 style={styles.loadingTitle}>Carregando configurações...</h2>
+          <p style={styles.loadingText}>
+            Preparando os dados do evento e suas permissões.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <div className="text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-600" />
-          <p className="mt-3 text-slate-600">Carregando configurações...</p>
-        </div>
-      </main>
-    )
-  }
+  const isAdmin = profile?.role === "admin";
+  const backLink = isAdmin ? "/dashboard" : "/meus-eventos";
 
-  if (error && !form.id) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <div className="w-full max-w-lg rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
-          <h1 className="text-2xl font-bold text-slate-900">Erro</h1>
-          <p className="mt-3 text-slate-600">{error}</p>
-          <Link
-            to="/painel"
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-white"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao painel
-          </Link>
-        </div>
-      </main>
-    )
-  }
+  const displayName =
+    profile?.studio_name ||
+    profile?.full_name ||
+    profile?.["full-name"] ||
+    user.email ||
+    "Usuário";
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
-          <div className="grid gap-8 p-6 sm:p-8 xl:grid-cols-[1.1fr_0.9fr]">
-            <div>
-              <Link
-                to="/painel"
-                className="inline-flex items-center gap-2 text-sm font-medium text-yellow-600"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Voltar ao painel
-              </Link>
+    <div style={styles.page}>
+      <div style={styles.backgroundGlowTop} />
+      <div style={styles.backgroundGlowBottom} />
 
-              <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
-                <Settings2 className="h-4 w-4" />
-                Configurações premium
-              </div>
+      <header style={styles.header}>
+        <div style={styles.headerLeft}>
+          <div style={styles.brandIcon}>
+            <Settings size={22} />
+          </div>
 
-              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-                Personalize seu evento com mais elegância.
-              </h1>
-
-              <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
-                Ajuste textos, aparência, regras de upload e comportamento da galeria em uma interface mais refinada.
-              </p>
+          <div>
+            <div style={styles.brandTitle}>Configurações do Evento</div>
+            <div style={styles.brandSubtitle}>
+              Painel premium L’Amour Galeria
             </div>
+          </div>
+        </div>
 
-            <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
-              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-yellow-600">Visual</p>
-                <p className="mt-2 text-2xl font-bold text-slate-900">Logo + Capa</p>
-                <p className="mt-2 text-sm text-slate-600">Identidade completa do evento</p>
-              </div>
-
-              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-yellow-600">Controle</p>
-                <p className="mt-2 text-2xl font-bold text-slate-900">Upload</p>
-                <p className="mt-2 text-sm text-slate-600">Abra ou feche quando quiser</p>
-              </div>
-
-              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-yellow-600">Moderação</p>
-                <p className="mt-2 text-2xl font-bold text-slate-900">Aprovação</p>
-                <p className="mt-2 text-sm text-slate-600">Defina o comportamento da galeria</p>
-              </div>
+        <div style={styles.headerRight}>
+          <div style={styles.partnerBadge}>
+            <UserCircle2 size={18} />
+            <div style={styles.partnerBadgeText}>
+              <strong style={styles.partnerName}>{displayName}</strong>
+              <span style={styles.partnerEmail}>{user.email}</span>
             </div>
+          </div>
+
+          <button type="button" onClick={handleLogout} style={styles.logoutButton}>
+            <LogOut size={16} />
+            Sair
+          </button>
+        </div>
+      </header>
+
+      <main style={styles.main}>
+        {message ? (
+          <div style={{ ...styles.alert, ...styles.alertSuccess }}>
+            {message}
+          </div>
+        ) : null}
+
+        {errorMessage ? (
+          <div style={{ ...styles.alert, ...styles.alertError }}>
+            {errorMessage}
+          </div>
+        ) : null}
+
+        <section style={styles.heroCard}>
+          <div>
+            <p style={styles.kicker}>Evento selecionado</p>
+            <h1 style={styles.heroTitle}>
+              {eventData?.name || "Configurações do evento"}
+            </h1>
+            <p style={styles.heroSubtitle}>
+              Defina como sua galeria vai funcionar para convidados, uploads e
+              vídeos.
+            </p>
+          </div>
+
+          <div style={styles.heroActions}>
+            <Link to={backLink} style={styles.ghostLinkButton}>
+              <ArrowLeft size={16} />
+              Voltar
+            </Link>
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
-          <form onSubmit={handleSave} className="space-y-6">
-            <FieldCard
-              title="Informações principais"
-              description="Defina os dados essenciais da página pública."
-              icon={Sparkles}
-            >
-              <div className="space-y-5">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Nome do evento
-                  </label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Slug atual
-                  </label>
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-slate-600">
-                    {form.slug || "Sem slug"}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Descrição
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={form.description}
-                    onChange={(e) => handleChange("description", e.target.value)}
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Instruções
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={form.instructions}
-                    onChange={(e) => handleChange("instructions", e.target.value)}
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                  />
-                </div>
-              </div>
-            </FieldCard>
-
-            <FieldCard
-              title="Identidade visual"
-              description="Envie logo, capa e personalize as cores."
-              icon={Palette}
-            >
-              <div className="space-y-6">
-                <div className="grid gap-6 sm:grid-cols-2">
+        {loading ? (
+          <section style={styles.panelCard}>
+            <p style={styles.emptyText}>Carregando informações do evento...</p>
+          </section>
+        ) : !eventData ? (
+          <section style={styles.panelCard}>
+            <p style={styles.emptyText}>Evento não encontrado.</p>
+            <div style={{ marginTop: 16 }}>
+              <Link to={backLink} style={styles.secondaryLinkButton}>
+                <ArrowLeft size={16} />
+                Voltar
+              </Link>
+            </div>
+          </section>
+        ) : (
+          <section style={styles.contentGrid}>
+            <div style={styles.leftColumn}>
+              <div style={styles.panelCard}>
+                <div style={styles.panelHeader}>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Logo do evento
-                    </label>
-
-                    <label className="flex cursor-pointer items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center hover:bg-slate-100">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleLogoChange}
-                        className="hidden"
-                      />
-                      <div>
-                        {uploadingLogo ? (
-                          <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-600" />
-                        ) : (
-                          <Upload className="mx-auto h-6 w-6 text-slate-600" />
-                        )}
-                        <p className="mt-2 text-sm font-medium text-slate-800">
-                          {uploadingLogo ? "Enviando logo..." : "Enviar logo"}
-                        </p>
-                      </div>
-                    </label>
-
-                    {form.logo_url && (
-                      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                        <img
-                          src={form.logo_url}
-                          alt="Logo do evento"
-                          className="h-24 w-auto object-contain"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Capa do evento
-                    </label>
-
-                    <label className="flex cursor-pointer items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center hover:bg-slate-100">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCoverChange}
-                        className="hidden"
-                      />
-                      <div>
-                        {uploadingCover ? (
-                          <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-600" />
-                        ) : (
-                          <ImagePlus className="mx-auto h-6 w-6 text-slate-600" />
-                        )}
-                        <p className="mt-2 text-sm font-medium text-slate-800">
-                          {uploadingCover ? "Enviando capa..." : "Enviar capa"}
-                        </p>
-                      </div>
-                    </label>
-
-                    {form.cover_url && (
-                      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                        <img
-                          src={form.cover_url}
-                          alt="Capa do evento"
-                          className="h-32 w-full object-cover"
-                        />
-                      </div>
-                    )}
+                    <p style={styles.kicker}>Resumo</p>
+                    <h2 style={styles.panelTitle}>Dados do evento</h2>
                   </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Cor principal
-                    </label>
-                    <input
-                      type="color"
-                      value={form.primary_color}
-                      onChange={(e) => handleChange("primary_color", e.target.value)}
-                      className="h-12 w-full rounded-xl border border-slate-300 bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Cor secundária
-                    </label>
-                    <input
-                      type="color"
-                      value={form.secondary_color}
-                      onChange={(e) => handleChange("secondary_color", e.target.value)}
-                      className="h-12 w-full rounded-xl border border-slate-300 bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Cor de destaque
-                    </label>
-                    <input
-                      type="color"
-                      value={form.accent_color}
-                      onChange={(e) => handleChange("accent_color", e.target.value)}
-                      className="h-12 w-full rounded-xl border border-slate-300 bg-white"
-                    />
-                  </div>
-                </div>
-              </div>
-            </FieldCard>
-
-            <FieldCard
-              title="Regras e moderação"
-              description="Controle uploads, vídeos e modo da galeria."
-              icon={ShieldCheck}
-            >
-              <div className="space-y-5">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
-                    <span>
-                      <span className="block font-medium text-slate-900">Upload aberto</span>
-                      <span className="mt-1 block text-sm text-slate-500">
-                        Permite que convidados enviem arquivos.
-                      </span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={form.is_upload_open}
-                      onChange={(e) => handleChange("is_upload_open", e.target.checked)}
-                      className="h-5 w-5"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
-                    <span>
-                      <span className="block font-medium text-slate-900">Permitir vídeos</span>
-                      <span className="mt-1 block text-sm text-slate-500">
-                        Aceitar ou bloquear vídeos no evento.
-                      </span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={form.allow_videos}
-                      onChange={(e) => handleChange("allow_videos", e.target.checked)}
-                      className="h-5 w-5"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 p-4 sm:col-span-2">
-                    <span>
-                      <span className="block font-medium text-slate-900">Exigir nome do convidado</span>
-                      <span className="mt-1 block text-sm text-slate-500">
-                        Obriga a informar nome antes do upload.
-                      </span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={form.require_guest_name}
-                      onChange={(e) => handleChange("require_guest_name", e.target.checked)}
-                      className="h-5 w-5"
-                    />
-                  </label>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Máx. foto (MB)
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={form.max_photo_size_mb}
-                      onChange={(e) => handleChange("max_photo_size_mb", e.target.value)}
-                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Máx. vídeo (MB)
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={form.max_video_size_mb}
-                      onChange={(e) => handleChange("max_video_size_mb", e.target.value)}
-                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Duração vídeo (s)
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={form.max_video_duration_seconds}
-                      onChange={(e) =>
-                        handleChange("max_video_duration_seconds", e.target.value)
-                      }
-                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Modo da galeria
-                  </label>
-                  <select
-                    value={form.gallery_mode}
-                    onChange={(e) => handleChange("gallery_mode", e.target.value)}
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                  >
-                    <option value="private">Aprovar automaticamente</option>
-                    <option value="approved_only">Entrar como pendente</option>
-                  </select>
-                </div>
-              </div>
-            </FieldCard>
-
-            {(error || message) && (
-              <div
-                className={`rounded-2xl px-4 py-3 text-sm ${
-                  error
-                    ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
-                    : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-                }`}
-              >
-                {error || message}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 font-medium text-white"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Salvar alterações
-                </>
-              )}
-            </button>
-          </form>
-
-          <aside>
-            <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
-              {form.cover_url ? (
-                <img
-                  src={form.cover_url}
-                  alt="Capa do evento"
-                  className="h-52 w-full object-cover"
+                <InfoBox label="Nome do evento" value={eventData.name} />
+                <InfoBox label="Slug" value={eventData.slug} />
+                <InfoBox label="Data" value={formatDate(eventData.event_date)} />
+                <InfoBox
+                  label="Upload para convidados"
+                  value={eventData.is_upload_open ? "Aberto" : "Fechado"}
                 />
-              ) : (
-                <div className="h-52 w-full" style={previewStyles} />
-              )}
-
-              <div className="p-6" style={!form.cover_url ? previewStyles : undefined}>
-                {form.logo_url && (
-                  <img
-                    src={form.logo_url}
-                    alt="Logo do evento"
-                    className="mb-4 h-16 w-auto object-contain"
-                  />
-                )}
-
-                <p className="text-sm font-medium opacity-80">Prévia visual</p>
-                <h2 className="mt-3 text-3xl font-bold">
-                  {form.name || "Nome do evento"}
-                </h2>
-                <p className="mt-3 max-w-xl text-sm leading-6 opacity-90">
-                  {form.description || "Descrição do evento aparecerá aqui."}
-                </p>
+                <InfoBox
+                  label="Parceiro"
+                  value={eventData.partner_name || "Sem parceiro vinculado"}
+                />
+                <InfoBox
+                  label="Link de upload"
+                  value={previewLinks.uploadUrl || "—"}
+                />
+                <InfoBox
+                  label="Galeria privada"
+                  value={previewLinks.privateGalleryUrl || "—"}
+                />
+                <InfoBox
+                  label="Galeria pública"
+                  value={previewLinks.publicGalleryUrl || "—"}
+                />
               </div>
 
-              <div className="p-6">
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                  <p className="text-sm font-semibold text-slate-800">Instruções</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {form.instructions || "As instruções aparecerão aqui."}
-                  </p>
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 p-4">
-                    <p className="text-sm font-medium text-slate-800">Upload</p>
-                    <p className="mt-2 text-sm text-slate-600">
-                      {form.is_upload_open ? "Aberto para convidados" : "Fechado no momento"}
-                    </p>
+              <div style={styles.statsGrid}>
+                <div style={styles.statCard}>
+                  <div style={styles.statIconWrap}>
+                    <ImageIcon size={18} />
                   </div>
-
-                  <div className="rounded-2xl border border-slate-200 p-4">
-                    <p className="text-sm font-medium text-slate-800">Vídeos</p>
-                    <p className="mt-2 text-sm text-slate-600">
-                      {form.allow_videos
-                        ? `Permitidos até ${form.max_video_duration_seconds}s`
-                        : "Desativados"}
-                    </p>
+                  <div>
+                    <div style={styles.statValue}>
+                      {form.max_photo_size_mb}MB
+                    </div>
+                    <div style={styles.statLabel}>Máximo por foto</div>
                   </div>
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  Novo slug ao salvar:{" "}
-                  <span className="font-semibold">{slugify(form.name) || "sem-slug"}</span>
+                <div style={styles.statCard}>
+                  <div style={styles.statIconWrap}>
+                    <Video size={18} />
+                  </div>
+                  <div>
+                    <div style={styles.statValue}>
+                      {form.allow_videos ? `${form.max_video_size_mb}MB` : "Off"}
+                    </div>
+                    <div style={styles.statLabel}>Vídeos</div>
+                  </div>
+                </div>
+
+                <div style={styles.statCard}>
+                  <div style={styles.statIconWrap}>
+                    <Lock size={18} />
+                  </div>
+                  <div>
+                    <div style={styles.statValue}>
+                      {form.gallery_mode === "private" ? "Privada" : "Pública"}
+                    </div>
+                    <div style={styles.statLabel}>Modo da galeria</div>
+                  </div>
                 </div>
               </div>
             </div>
-          </aside>
-        </section>
-      </div>
-    </main>
-  )
+
+            <div style={styles.rightColumn}>
+              <form onSubmit={handleSave} style={styles.panelCard}>
+                <div style={styles.panelHeader}>
+                  <div>
+                    <p style={styles.kicker}>Preferências</p>
+                    <h2 style={styles.panelTitle}>Editar configurações</h2>
+                  </div>
+                </div>
+
+                <div style={styles.formGrid}>
+                  <label style={styles.field}>
+                    <span style={styles.label}>Modo da galeria</span>
+                    <select
+                      name="gallery_mode"
+                      value={form.gallery_mode}
+                      onChange={handleChange}
+                      style={styles.input}
+                    >
+                      <option value="private">Privada</option>
+                      <option value="public">Pública</option>
+                    </select>
+                  </label>
+
+                  <label style={styles.field}>
+                    <span style={styles.label}>Tamanho máximo da foto (MB)</span>
+                    <input
+                      type="number"
+                      min="1"
+                      name="max_photo_size_mb"
+                      value={form.max_photo_size_mb}
+                      onChange={handleChange}
+                      style={styles.input}
+                    />
+                  </label>
+
+                  <div style={styles.fullWidth}>
+                    <label style={styles.checkboxRow}>
+                      <input
+                        type="checkbox"
+                        name="allow_videos"
+                        checked={form.allow_videos}
+                        onChange={handleChange}
+                      />
+                      Permitir envio de vídeos
+                    </label>
+                  </div>
+
+                  <label style={styles.field}>
+                    <span style={styles.label}>Tamanho máximo do vídeo (MB)</span>
+                    <input
+                      type="number"
+                      min="1"
+                      name="max_video_size_mb"
+                      value={form.max_video_size_mb}
+                      onChange={handleChange}
+                      style={{
+                        ...styles.input,
+                        ...(form.allow_videos ? {} : styles.inputDisabled),
+                      }}
+                      disabled={!form.allow_videos}
+                    />
+                  </label>
+
+                  <label style={styles.field}>
+                    <span style={styles.label}>
+                      Duração máxima do vídeo (segundos)
+                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      name="max_video_duration_seconds"
+                      value={form.max_video_duration_seconds}
+                      onChange={handleChange}
+                      style={{
+                        ...styles.input,
+                        ...(form.allow_videos ? {} : styles.inputDisabled),
+                      }}
+                      disabled={!form.allow_videos}
+                    />
+                  </label>
+
+                  <div style={styles.fullWidth}>
+                    <label style={styles.checkboxRow}>
+                      <input
+                        type="checkbox"
+                        name="require_guest_name"
+                        checked={form.require_guest_name}
+                        onChange={handleChange}
+                      />
+                      Exigir nome do convidado no envio
+                    </label>
+                  </div>
+
+                  <div style={styles.fullWidth}>
+                    <button
+                      type="submit"
+                      style={styles.primaryButton}
+                      disabled={saving}
+                    >
+                      <Save size={18} />
+                      {saving ? "Salvando..." : "Salvar configurações"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              <div style={styles.panelCard}>
+                <div style={styles.panelHeader}>
+                  <div>
+                    <p style={styles.kicker}>Pré-visualização</p>
+                    <h2 style={styles.panelTitle}>Status atual</h2>
+                  </div>
+                </div>
+
+                <div style={styles.statusList}>
+                  <StatusRow
+                    icon={<Shield size={16} />}
+                    label="Modo da galeria"
+                    value={form.gallery_mode === "private" ? "Privada" : "Pública"}
+                  />
+                  <StatusRow
+                    icon={<Video size={16} />}
+                    label="Vídeos"
+                    value={form.allow_videos ? "Permitidos" : "Bloqueados"}
+                  />
+                  <StatusRow
+                    icon={<Camera size={16} />}
+                    label="Limite de foto"
+                    value={`${form.max_photo_size_mb} MB`}
+                  />
+                  <StatusRow
+                    icon={<CalendarDays size={16} />}
+                    label="Limite de vídeo"
+                    value={
+                      form.allow_videos
+                        ? `${form.max_video_size_mb} MB / ${form.max_video_duration_seconds}s`
+                        : "Desativado"
+                    }
+                  />
+                  <StatusRow
+                    icon={<CheckCircle2 size={16} />}
+                    label="Identificação do convidado"
+                    value={form.require_guest_name ? "Obrigatória" : "Opcional"}
+                  />
+                </div>
+
+                <div style={styles.actionsRow}>
+                  <Link to={backLink} style={styles.secondaryLinkButton}>
+                    <ArrowLeft size={16} />
+                    Voltar ao painel
+                  </Link>
+
+                  <Link
+                    to={`/evento/${eventData.slug}/galeria`}
+                    style={styles.primaryLinkButton}
+                  >
+                    <ImageIcon size={16} />
+                    Abrir galeria
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
+  );
 }
+
+function InfoBox({ label, value }) {
+  return (
+    <div style={styles.infoBox}>
+      <span style={styles.infoLabel}>{label}</span>
+      <strong style={styles.infoValue}>{value || "—"}</strong>
+    </div>
+  );
+}
+
+function StatusRow({ icon, label, value }) {
+  return (
+    <div style={styles.statusRow}>
+      <div style={styles.statusLeft}>
+        <span style={styles.statusIcon}>{icon}</span>
+        <span style={styles.statusLabel}>{label}</span>
+      </div>
+      <strong style={styles.statusValue}>{value}</strong>
+    </div>
+  );
+}
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(240,210,170,0.18), transparent 25%), radial-gradient(circle at bottom right, rgba(176,137,104,0.16), transparent 22%), linear-gradient(180deg, #f7f5f2 0%, #f4f0ea 100%)",
+    position: "relative",
+    overflow: "hidden",
+  },
+  backgroundGlowTop: {
+    position: "absolute",
+    top: "-120px",
+    left: "-120px",
+    width: "320px",
+    height: "320px",
+    borderRadius: "50%",
+    background: "rgba(176,137,104,0.12)",
+    filter: "blur(60px)",
+    pointerEvents: "none",
+  },
+  backgroundGlowBottom: {
+    position: "absolute",
+    bottom: "-140px",
+    right: "-120px",
+    width: "340px",
+    height: "340px",
+    borderRadius: "50%",
+    background: "rgba(30,36,64,0.08)",
+    filter: "blur(70px)",
+    pointerEvents: "none",
+  },
+  loadingScreen: {
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    background: "linear-gradient(180deg, #f7f5f2 0%, #f4f0ea 100%)",
+    padding: "24px",
+  },
+  loadingCard: {
+    width: "100%",
+    maxWidth: "440px",
+    background: "rgba(255,255,255,0.75)",
+    backdropFilter: "blur(12px)",
+    border: "1px solid rgba(255,255,255,0.65)",
+    borderRadius: "28px",
+    padding: "32px",
+    boxShadow: "0 18px 50px rgba(24,32,79,0.08)",
+    textAlign: "center",
+  },
+  logoBadge: {
+    width: "64px",
+    height: "64px",
+    borderRadius: "22px",
+    margin: "0 auto 16px",
+    background: "linear-gradient(135deg, #1e2440 0%, #2d355d 100%)",
+    color: "#fff",
+    display: "grid",
+    placeItems: "center",
+    boxShadow: "0 12px 30px rgba(30,36,64,0.22)",
+  },
+  loadingTitle: {
+    margin: "0 0 10px",
+    fontSize: "24px",
+    color: "#1f2333",
+  },
+  loadingText: {
+    margin: 0,
+    color: "#6c7388",
+    fontSize: "15px",
+  },
+  header: {
+    position: "sticky",
+    top: 0,
+    zIndex: 20,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "16px",
+    padding: "20px 28px",
+    backdropFilter: "blur(18px)",
+    background: "rgba(247,245,242,0.72)",
+    borderBottom: "1px solid rgba(30,36,64,0.08)",
+  },
+  headerLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+  },
+  brandIcon: {
+    width: "52px",
+    height: "52px",
+    borderRadius: "18px",
+    background: "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
+    color: "#fff",
+    display: "grid",
+    placeItems: "center",
+    boxShadow: "0 12px 28px rgba(30,36,64,0.22)",
+  },
+  brandTitle: {
+    fontSize: "17px",
+    fontWeight: 800,
+    color: "#1f2333",
+  },
+  brandSubtitle: {
+    fontSize: "13px",
+    color: "#7c8295",
+    marginTop: "2px",
+  },
+  headerRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+  partnerBadge: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    background: "rgba(255,255,255,0.78)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    borderRadius: "16px",
+    padding: "10px 14px",
+    color: "#1f2333",
+  },
+  partnerBadgeText: {
+    display: "grid",
+    gap: "2px",
+  },
+  partnerName: {
+    fontSize: "14px",
+  },
+  partnerEmail: {
+    fontSize: "12px",
+    color: "#737a8f",
+    wordBreak: "break-word",
+  },
+  logoutButton: {
+    height: "44px",
+    borderRadius: "14px",
+    border: "1px solid rgba(30,36,64,0.08)",
+    background: "#fff",
+    color: "#1f2333",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    cursor: "pointer",
+    fontWeight: 700,
+    padding: "0 16px",
+    boxShadow: "0 8px 22px rgba(24,32,79,0.06)",
+  },
+  main: {
+    position: "relative",
+    zIndex: 1,
+    padding: "28px",
+  },
+  alert: {
+    marginBottom: "18px",
+    borderRadius: "16px",
+    padding: "14px 16px",
+    boxShadow: "0 10px 24px rgba(24,32,79,0.06)",
+  },
+  alertSuccess: {
+    background: "#eef9f1",
+    color: "#22663f",
+    border: "1px solid #cbe8d4",
+  },
+  alertError: {
+    background: "#fff4e8",
+    color: "#8a5a00",
+    border: "1px solid #efd7b5",
+  },
+  heroCard: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "18px",
+    flexWrap: "wrap",
+    background:
+      "linear-gradient(135deg, rgba(30,36,64,0.98) 0%, rgba(52,64,109,0.96) 100%)",
+    borderRadius: "30px",
+    padding: "28px",
+    color: "#fff",
+    boxShadow: "0 18px 50px rgba(30,36,64,0.18)",
+    marginBottom: "22px",
+  },
+  kicker: {
+    margin: 0,
+    color: "#e5c79a",
+    fontWeight: 800,
+    fontSize: "12px",
+    letterSpacing: ".08em",
+    textTransform: "uppercase",
+  },
+  heroTitle: {
+    margin: "10px 0 10px",
+    fontSize: "32px",
+    lineHeight: 1.1,
+  },
+  heroSubtitle: {
+    margin: 0,
+    maxWidth: "700px",
+    color: "rgba(255,255,255,0.8)",
+    fontSize: "15px",
+    lineHeight: 1.6,
+  },
+  heroActions: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+  ghostLinkButton: {
+    height: "46px",
+    border: "1px solid rgba(255,255,255,0.18)",
+    borderRadius: "14px",
+    background: "rgba(255,255,255,0.12)",
+    color: "#fff",
+    padding: "0 18px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    textDecoration: "none",
+    fontWeight: 700,
+    backdropFilter: "blur(8px)",
+  },
+  contentGrid: {
+    display: "grid",
+    gridTemplateColumns: "1.05fr 0.95fr",
+    gap: "20px",
+    alignItems: "start",
+  },
+  leftColumn: {
+    display: "grid",
+    gap: "20px",
+  },
+  rightColumn: {
+    display: "grid",
+    gap: "20px",
+  },
+  panelCard: {
+    background: "rgba(255,255,255,0.78)",
+    backdropFilter: "blur(14px)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    borderRadius: "28px",
+    padding: "22px",
+    boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
+  },
+  panelHeader: {
+    marginBottom: "16px",
+  },
+  panelTitle: {
+    margin: "8px 0 0",
+    fontSize: "24px",
+    color: "#1f2333",
+  },
+  emptyText: {
+    color: "#6f768b",
+    fontSize: "14px",
+    lineHeight: 1.6,
+    margin: 0,
+  },
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: "16px",
+  },
+  statCard: {
+    background: "rgba(255,255,255,0.8)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    borderRadius: "24px",
+    padding: "20px",
+    boxShadow: "0 14px 34px rgba(24,32,79,0.06)",
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+  },
+  statIconWrap: {
+    width: "46px",
+    height: "46px",
+    borderRadius: "15px",
+    background: "linear-gradient(135deg, #f0dfc6 0%, #edd0a9 100%)",
+    color: "#5e4632",
+    display: "grid",
+    placeItems: "center",
+  },
+  statValue: {
+    fontSize: "28px",
+    fontWeight: 800,
+    color: "#1f2333",
+    lineHeight: 1,
+    marginBottom: "6px",
+  },
+  statLabel: {
+    fontSize: "13px",
+    color: "#71788c",
+  },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "14px",
+  },
+  fullWidth: {
+    gridColumn: "1 / -1",
+  },
+  field: {
+    display: "grid",
+    gap: "6px",
+  },
+  label: {
+    color: "#42485c",
+    fontWeight: 700,
+    fontSize: "14px",
+  },
+  input: {
+    height: "46px",
+    borderRadius: "12px",
+    border: "1px solid #dfe3ec",
+    padding: "0 12px",
+    outline: "none",
+    fontSize: "14px",
+    background: "#fff",
+  },
+  inputDisabled: {
+    background: "#f2f3f7",
+    color: "#8d93a5",
+    cursor: "not-allowed",
+  },
+  checkboxRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    fontSize: "14px",
+    color: "#42485c",
+    fontWeight: 600,
+    minHeight: "46px",
+  },
+  primaryButton: {
+    height: "48px",
+    border: "none",
+    borderRadius: "14px",
+    background: "linear-gradient(135deg, #1e2440 0%, #33406b 100%)",
+    color: "#fff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    cursor: "pointer",
+    fontWeight: 800,
+    padding: "0 18px",
+    boxShadow: "0 12px 24px rgba(30,36,64,0.16)",
+  },
+  infoBox: {
+    background: "#f8f6f2",
+    border: "1px solid #eee9e1",
+    borderRadius: "16px",
+    padding: "12px 14px",
+    marginBottom: "10px",
+  },
+  infoLabel: {
+    display: "block",
+    fontSize: "11px",
+    color: "#8a90a3",
+    textTransform: "uppercase",
+    letterSpacing: ".06em",
+    marginBottom: "5px",
+  },
+  infoValue: {
+    color: "#23283a",
+    fontSize: "14px",
+    wordBreak: "break-word",
+  },
+  statusList: {
+    display: "grid",
+    gap: "10px",
+  },
+  statusRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    padding: "14px",
+    borderRadius: "16px",
+    background: "#f8f6f2",
+    border: "1px solid #eee9e1",
+    flexWrap: "wrap",
+  },
+  statusLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  },
+  statusIcon: {
+    width: "30px",
+    height: "30px",
+    borderRadius: "10px",
+    background: "#fff",
+    border: "1px solid #ebe6dd",
+    display: "grid",
+    placeItems: "center",
+    color: "#7b5e44",
+  },
+  statusLabel: {
+    color: "#4d5367",
+    fontSize: "14px",
+    fontWeight: 600,
+  },
+  statusValue: {
+    color: "#1f2333",
+    fontSize: "14px",
+  },
+  actionsRow: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+    marginTop: "16px",
+  },
+  primaryLinkButton: {
+    height: "44px",
+    border: "none",
+    borderRadius: "14px",
+    background: "linear-gradient(135deg, #1e2440 0%, #33406b 100%)",
+    color: "#fff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    textDecoration: "none",
+    fontWeight: 800,
+    padding: "0 16px",
+    boxShadow: "0 12px 24px rgba(30,36,64,0.16)",
+  },
+  secondaryLinkButton: {
+    height: "42px",
+    border: "1px solid #e1ddd6",
+    borderRadius: "14px",
+    background: "#fff",
+    color: "#29314d",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    textDecoration: "none",
+    fontWeight: 700,
+    padding: "0 14px",
+  },
+};

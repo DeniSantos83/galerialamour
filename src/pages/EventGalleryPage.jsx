@@ -266,17 +266,6 @@ export default function EventGalleryPage() {
       setLoading(true)
       setError("")
 
-      const { data: relations, error: relationError } = await supabase
-        .from("event_users")
-        .select("event_id, role")
-        .eq("user_id", user.id)
-
-      if (relationError) {
-        setError(relationError.message || "Erro ao validar acesso ao evento.")
-        setLoading(false)
-        return
-      }
-
       const { data: eventData, error: eventError } = await supabase
         .from("events")
         .select("*")
@@ -289,15 +278,52 @@ export default function EventGalleryPage() {
         return
       }
 
+      const { data: relations, error: relationError } = await supabase
+        .from("event_users")
+        .select("event_id, role")
+        .eq("user_id", user.id)
+
+      if (relationError) {
+        setError(relationError.message || "Erro ao validar acesso ao evento.")
+        setLoading(false)
+        return
+      }
+
       const relation = relations?.find((r) => r.event_id === eventData.id)
 
-      if (!relation) {
+      let resolvedRole = relation?.role || "viewer"
+      let hasAccess = !!relation
+
+      if (!hasAccess) {
+        const { data: partnerData, error: partnerError } = await supabase
+          .from("partners")
+          .select("id")
+          .eq("profile_id", user.id)
+          .maybeSingle()
+
+        if (partnerError) {
+          setError(partnerError.message || "Erro ao validar parceiro.")
+          setLoading(false)
+          return
+        }
+
+        const isOwner = eventData.created_by === user.id
+        const isLinkedPartner =
+          !!partnerData && eventData.partner_id === partnerData.id
+
+        if (isOwner || isLinkedPartner) {
+          hasAccess = true
+          resolvedRole = isOwner ? "owner" : "editor"
+        }
+      }
+
+      if (!hasAccess) {
         setError("Você não tem acesso a esta galeria.")
         setLoading(false)
         return
       }
 
-      setUserRole(relation.role)
+      setUserRole(resolvedRole)
       setEvent(eventData)
 
       const { data: uploadsData, error: uploadsError } = await supabase

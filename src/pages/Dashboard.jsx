@@ -133,11 +133,15 @@ export default function Dashboard() {
 
       const { data, error } = await supabase
         .from("events")
-        .select("*")
+        .select(`*, event_settings (*)`)
         .order("created_at", { ascending: false });
+        console.log("USER:", user);
+        console.log("EVENTS DATA:", data);
+        console.log("EVENTS ERROR:", error);
 
       if (error) throw error;
 
+      
       setEvents(data || []);
 
       if (data?.length) {
@@ -156,7 +160,40 @@ export default function Dashboard() {
       setLoadingEvents(false);
     }
   }
+  async function loadEvents() {
+  try {
+    setLoadingEvents(true);
 
+    const { data, error } = await supabase
+      .from("events")
+      .select(`*,event_settings (*)`)
+      .order("created_at", { ascending: false });
+
+    console.log("USER:", user);
+    console.log("EVENTS DATA:", data);
+    console.log("EVENTS ERROR:", error);
+
+    if (error) throw error;
+
+    setEvents(data || []);
+
+    if (data?.length) {
+      setSelectedEvent((current) => {
+        if (!current) return data[0];
+        const stillExists = data.find((item) => item.id === current.id);
+        return stillExists || data[0];
+      });
+    } else {
+      setSelectedEvent(null);
+    }
+
+  } catch (error) {
+    console.error("Erro ao carregar eventos:", error);
+    setMessage("Erro ao carregar eventos.");
+  } finally {
+    setLoadingEvents(false);
+  }
+}
   async function loadPartners() {
     try {
       setLoadingPartners(true);
@@ -211,61 +248,117 @@ export default function Dashboard() {
   }
 
   async function handleCreateEvent(e) {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (!form.name.trim()) {
-      setMessage("Informe o nome do evento.");
-      return;
-    }
-
-    if (!slug) {
-      setMessage("Não foi possível gerar o slug do evento.");
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setMessage("");
-
-      const payload = {
-        slug,
-        name: form.name.trim(),
-        description: form.description.trim() || null,
-        logo_url: form.logo_url.trim() || null,
-        cover_url: form.cover_url.trim() || null,
-        primary_color: form.primary_color,
-        secondary_color: form.secondary_color,
-        accent_color: form.accent_color,
-        instructions: form.instructions.trim() || null,
-        is_upload_open: form.is_upload_open,
-        created_by: user?.id || null,
-        partner_id: form.partner_id || null,
-        partner_name: form.partner_name || null,
-        event_date: form.event_date || null,
-      };
-
-      const { data, error } = await supabase
-        .from("events")
-        .insert([payload])
-        .select("*")
-        .single();
-
-      if (error) throw error;
-
-      setForm(initialForm);
-      setMessage("Evento criado com sucesso.");
-      await loadEvents();
-
-      if (data) {
-        setSelectedEvent(data);
-      }
-    } catch (error) {
-      console.error("Erro ao criar evento:", error);
-      setMessage(error.message || "Erro ao criar evento.");
-    } finally {
-      setSaving(false);
-    }
+  if (!form.name.trim()) {
+    setMessage("Informe o nome do evento.");
+    return;
   }
+
+  const baseSlug = slugify(form.name);
+  if (!baseSlug) {
+    setMessage("Não foi possível gerar o slug do evento.");
+    return;
+  }
+
+  async function generateUniqueSlug(base) {
+    let newSlug = base;
+    let counter = 1;
+
+    while (true) {
+      const { data } = await supabase
+        .from("events")
+        .select("id")
+        .eq("slug", newSlug)
+        .maybeSingle();
+
+      if (!data) break;
+
+      newSlug = `${base}-${counter}`;
+      counter++;
+    }
+
+    return newSlug;
+  }
+
+  let createdEvent = null;
+
+  try {
+    setSaving(true);
+    setMessage("");
+
+    const uniqueSlug = await generateUniqueSlug(baseSlug);
+
+    const payload = {
+      slug: uniqueSlug,
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      logo_url: form.logo_url.trim() || null,
+      cover_url: form.cover_url.trim() || null,
+      primary_color: form.primary_color,
+      secondary_color: form.secondary_color,
+      accent_color: form.accent_color,
+      instructions: form.instructions.trim() || null,
+      is_upload_open: form.is_upload_open,
+      created_by: user?.id || null,
+      partner_id: form.partner_id || null,
+      partner_name: form.partner_name || null,
+      event_date: form.event_date || null,
+    };
+
+    const { data: insertedEvent, error: eventError } = await supabase
+      .from("events")
+      .insert([payload])
+      .select("*")
+      .single();
+
+    if (eventError) throw eventError;
+
+    createdEvent = insertedEvent;
+
+    const { error: settingsError } = await supabase
+      .from("event_settings")
+      .insert([
+        {
+          event_id: createdEvent.id,
+          allow_videos: true,
+          max_photo_size_mb: 20,
+          max_video_size_mb: 80,
+          max_video_duration_seconds: 45,
+          require_guest_name: false,
+          gallery_mode: "private",
+        },
+      ]);
+
+    if (settingsError) throw settingsError;
+
+    const { error: eventUserError } = await supabase
+      .from("event_users")
+      .insert([
+        {
+          event_id: createdEvent.id,
+          user_id: user.id,
+          role: "owner",
+        },
+      ]);
+
+    if (eventUserError) throw eventUserError;
+
+    setForm(initialForm);
+    setMessage("Evento criado com sucesso.");
+    await loadEvents();
+    setSelectedEvent(createdEvent);
+  } catch (error) {
+    console.error("Erro ao criar evento:", error);
+    setMessage(error.message || "Erro ao criar evento.");
+
+    if (createdEvent?.id) {
+      await supabase.from("events").delete().eq("id", createdEvent.id);
+    }
+  } finally {
+    setSaving(false);
+  }
+}
 
   async function handleLogout() {
     await supabase.auth.signOut();

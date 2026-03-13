@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Camera, UserPlus, LogIn } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
+import logo from "../assets/logo.png";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -51,7 +52,7 @@ export default function Login() {
   async function getProfileById(userId) {
     const { data, error } = await supabase
       .from("profiles")
-      .select('*')
+      .select("*")
       .eq("id", userId)
       .maybeSingle();
 
@@ -71,14 +72,14 @@ export default function Login() {
 
     const payload = {
       id: user.id,
-       email: (user.email || "").toLowerCase(),
+      email: (user.email || "").toLowerCase(),
       role,
       active: true,
-       full_name:
-       fullNameFallback?.trim() ||
-       user.user_metadata?.full_name ||
-       user.user_metadata?.name ||
-       "",
+      full_name:
+        fullNameFallback?.trim() ||
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        "",
     };
 
     const { error } = await supabase.from("profiles").insert([payload]);
@@ -125,8 +126,6 @@ export default function Login() {
       profile = await createProfileIfMissing(user, fullNameFallback);
     }
 
-    // Se existir parceiro com o email, garantimos role partner
-    // sem sobrescrever admin.
     const partner = await getPartnerByEmail(user.email || "");
 
     if (partner && profile.role !== "admin") {
@@ -220,7 +219,16 @@ export default function Login() {
 
   return (
     <div style={styles.page}>
+      <div style={styles.glowTop} />
+      <div style={styles.glowBottom} />
+
       <div style={styles.card}>
+        <div style={styles.logoWrap}>
+          <div style={styles.logoBox}>
+            <img src={logo} alt="Galeria L’Amour" style={styles.logoImage} />
+          </div>
+        </div>
+
         <div style={styles.brand}>
           <div style={styles.brandIcon}>
             <Camera size={22} />
@@ -379,55 +387,107 @@ const styles = {
     placeItems: "center",
     padding: "24px",
     background:
-      "linear-gradient(135deg, #f7f3f1 0%, #f1f4fb 50%, #f8f8fc 100%)",
+      "radial-gradient(circle at top left, rgba(176,137,104,0.14), transparent 22%), radial-gradient(circle at bottom right, rgba(30,36,64,0.16), transparent 25%), linear-gradient(135deg, #f7f3f1 0%, #f1f4fb 50%, #f8f8fc 100%)",
+    position: "relative",
+    overflow: "hidden",
+  },
+  glowTop: {
+    position: "absolute",
+    top: "-120px",
+    left: "-120px",
+    width: "320px",
+    height: "320px",
+    borderRadius: "50%",
+    background: "rgba(176,137,104,0.12)",
+    filter: "blur(60px)",
+    pointerEvents: "none",
+  },
+  glowBottom: {
+    position: "absolute",
+    bottom: "-120px",
+    right: "-120px",
+    width: "340px",
+    height: "340px",
+    borderRadius: "50%",
+    background: "rgba(30,36,64,0.10)",
+    filter: "blur(70px)",
+    pointerEvents: "none",
   },
   card: {
+    position: "relative",
+    zIndex: 1,
     width: "100%",
-    maxWidth: "460px",
+    maxWidth: "480px",
+    background: "rgba(255,255,255,0.86)",
+    backdropFilter: "blur(14px)",
+    border: "1px solid rgba(255,255,255,0.7)",
+    borderRadius: "32px",
+    padding: "30px",
+    boxShadow: "0 20px 60px rgba(24, 32, 79, 0.12)",
+  },
+  logoWrap: {
+    display: "flex",
+    justifyContent: "center",
+    marginBottom: "22px",
+  },
+  logoBox: {
     background: "#ffffff",
     border: "1px solid #ececf3",
     borderRadius: "28px",
-    padding: "28px",
-    boxShadow: "0 18px 50px rgba(24, 32, 79, 0.10)",
+    padding: "16px 22px",
+    boxShadow: "0 14px 36px rgba(24, 32, 79, 0.08)",
+  },
+  logoImage: {
+    height: "150px",
+    width: "auto",
+    display: "block",
+    objectFit: "contain",
+    borderRadius: "28px"
   },
   brand: {
     display: "flex",
     gap: "14px",
     alignItems: "center",
-    marginBottom: "20px",
+    marginBottom: "22px",
   },
   brandIcon: {
-    width: "52px",
-    height: "52px",
+    width: "54px",
+    height: "54px",
     borderRadius: "18px",
-    background: "#1e2440",
+    background: "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
     color: "#fff",
     display: "grid",
     placeItems: "center",
     flexShrink: 0,
+    boxShadow: "0 12px 24px rgba(30,36,64,0.18)",
   },
   title: {
     margin: 0,
     fontSize: "28px",
     color: "#1f2333",
+    fontWeight: 800,
   },
   subtitle: {
     margin: "6px 0 0",
     color: "#6a7188",
     fontSize: "14px",
-    lineHeight: 1.5,
+    lineHeight: 1.6,
   },
   tabs: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: "10px",
-    marginBottom: "18px",
+    marginBottom: "20px",
+    padding: "6px",
+    background: "#f4f6fb",
+    borderRadius: "18px",
+    border: "1px solid #e7ebf3",
   },
   tabButton: {
-    height: "44px",
+    height: "46px",
     borderRadius: "14px",
-    border: "1px solid #e3e7ef",
-    background: "#f8f9fd",
+    border: "1px solid transparent",
+    background: "transparent",
     color: "#49506a",
     fontWeight: 700,
     cursor: "pointer",
@@ -435,11 +495,13 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     gap: "8px",
+    transition: "all .2s ease",
   },
   tabButtonActive: {
-    background: "#1e2440",
+    background: "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
     color: "#fff",
     border: "1px solid #1e2440",
+    boxShadow: "0 8px 18px rgba(30,36,64,0.16)",
   },
   form: {
     display: "grid",
@@ -447,63 +509,74 @@ const styles = {
   },
   label: {
     display: "grid",
-    gap: "6px",
+    gap: "7px",
     color: "#3f4558",
     fontWeight: 700,
     fontSize: "14px",
   },
   input: {
-    height: "46px",
-    borderRadius: "14px",
+    height: "48px",
+    borderRadius: "16px",
     border: "1px solid #dfe3ec",
-    padding: "0 14px",
+    padding: "0 16px",
     outline: "none",
     fontSize: "14px",
+    background: "#fff",
+    color: "#1f2333",
+    boxShadow: "inset 0 1px 2px rgba(15,23,42,0.03)",
   },
   passwordWrap: {
     display: "grid",
-    gridTemplateColumns: "1fr 46px",
+    gridTemplateColumns: "1fr 50px",
     border: "1px solid #dfe3ec",
-    borderRadius: "14px",
+    borderRadius: "16px",
     overflow: "hidden",
     background: "#fff",
+    boxShadow: "inset 0 1px 2px rgba(15,23,42,0.03)",
   },
   passwordInput: {
-    height: "46px",
+    height: "48px",
     border: "none",
-    padding: "0 14px",
+    padding: "0 16px",
     outline: "none",
     fontSize: "14px",
+    color: "#1f2333",
+    background: "#fff",
   },
   eyeButton: {
     border: "none",
     background: "#fff",
     cursor: "pointer",
     color: "#5f667d",
+    display: "grid",
+    placeItems: "center",
   },
   primaryButton: {
-    height: "48px",
-    borderRadius: "14px",
+    height: "50px",
+    borderRadius: "16px",
     border: "none",
-    background: "#1e2440",
+    background: "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
     color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
-    marginTop: "4px",
+    marginTop: "6px",
+    boxShadow: "0 14px 28px rgba(30,36,64,0.18)",
   },
   message: {
     marginTop: "16px",
     background: "#fff7e6",
     border: "1px solid #f0d999",
     color: "#775300",
-    borderRadius: "14px",
+    borderRadius: "16px",
     padding: "12px 14px",
     fontSize: "14px",
+    lineHeight: 1.5,
   },
   footerText: {
-    marginTop: "16px",
+    marginTop: "18px",
     color: "#7c8399",
     fontSize: "13px",
     textAlign: "center",
+    lineHeight: 1.6,
   },
 };
