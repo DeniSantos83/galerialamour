@@ -1,666 +1,1114 @@
-import { useEffect, useMemo, useState } from "react"
-import { Link, Navigate } from "react-router-dom"
-import QRCode from "qrcode"
+import { useEffect, useMemo, useState } from "react";
+import { Link, Navigate } from "react-router-dom";
+import QRCode from "qrcode";
 import {
   Copy,
   ExternalLink,
-  Image as ImageIcon,
   LogOut,
   PlusCircle,
   QrCode,
   CheckCircle2,
-  Settings2,
   Download,
   Globe,
-  Sparkles,
   Link2,
   LayoutDashboard,
-} from "lucide-react"
-import { supabase } from "../lib/supabase"
-import { slugify } from "../lib/utils"
+  Users,
+  CalendarDays,
+} from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { slugify } from "../lib/utils";
+import PartnersPage from "./PartnersPage";
 
 const initialForm = {
   name: "",
   description: "",
-  primary_color: "#111827",
-  secondary_color: "#ffffff",
-  accent_color: "#ec4899",
-  instructions: "Envie fotos e vídeos de até 45 segundos.",
-}
-
-function InfoChip({ label, value }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-slate-900">{value}</p>
-    </div>
-  )
-}
-
-function ActionButton({ children, className = "", ...props }) {
-  return (
-    <button
-      {...props}
-      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition ${className}`}
-    >
-      {children}
-    </button>
-  )
-}
-
-function EventCard({ event }) {
-  const [qrCodeUrl, setQrCodeUrl] = useState("")
-  const [copiedField, setCopiedField] = useState("")
-
-  const uploadUrl = `${window.location.origin}/evento/${event.slug}/upload`
-  const privateGalleryUrl = `${window.location.origin}/evento/${event.slug}/galeria`
-  const publicGalleryUrl = `${window.location.origin}/galeria/${event.slug}`
-
-  useEffect(() => {
-    async function generateQr() {
-      try {
-        const dataUrl = await QRCode.toDataURL(uploadUrl, {
-          width: 240,
-          margin: 2,
-        })
-        setQrCodeUrl(dataUrl)
-      } catch (error) {
-        console.error("Erro ao gerar QR Code:", error)
-      }
-    }
-
-    generateQr()
-  }, [uploadUrl])
-
-  async function handleCopy(text, type) {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopiedField(type)
-      setTimeout(() => setCopiedField(""), 1800)
-    } catch (error) {
-      console.error("Erro ao copiar:", error)
-      alert("Não foi possível copiar o link.")
-    }
-  }
-
-  return (
-    <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
-      <div
-        className="relative overflow-hidden p-6"
-        style={{
-          background: `linear-gradient(135deg, ${event.primary_color} 0%, ${event.accent_color} 100%)`,
-        }}
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_30%)]" />
-
-        <div className="relative flex items-start justify-between gap-4">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-white backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5" />
-              Evento ativo
-            </div>
-
-            <h3 className="mt-4 text-2xl font-bold text-white sm:text-3xl">
-              {event.name}
-            </h3>
-
-            <p className="mt-3 max-w-xl text-sm leading-6 text-white/85">
-              {event.description || "Sem descrição cadastrada."}
-            </p>
-          </div>
-
-          <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white backdrop-blur">
-            {event.is_upload_open ? "Upload aberto" : "Upload fechado"}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid gap-6 p-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="space-y-5">
-          <div>
-            <p className="text-sm font-medium text-yellow-600">Resumo do evento</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <InfoChip label="Slug" value={event.slug} />
-              <InfoChip label="Papel" value={event.role} />
-            </div>
-          </div>
-
-          <div className="grid gap-4">
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-              <div className="flex items-center gap-2">
-                <Link2 className="h-4 w-4 text-yellow-600" />
-                <p className="text-sm font-semibold text-slate-900">Link público de upload</p>
-              </div>
-
-              <p className="mt-3 break-all text-sm leading-6 text-slate-600">
-                {uploadUrl}
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <ActionButton
-                  type="button"
-                  onClick={() => handleCopy(uploadUrl, "upload")}
-                  className="bg-slate-900 text-white"
-                >
-                  {copiedField === "upload" ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      Copiado
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      Copiar link
-                    </>
-                  )}
-                </ActionButton>
-
-                <a
-                  href={uploadUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Abrir página
-                </a>
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-              <div className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4 text-yellow-600" />
-                <p className="text-sm font-semibold text-slate-900">Galeria privada</p>
-              </div>
-
-              <p className="mt-3 break-all text-sm leading-6 text-slate-600">
-                {privateGalleryUrl}
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <ActionButton
-                  type="button"
-                  onClick={() => handleCopy(privateGalleryUrl, "private-gallery")}
-                  className="bg-slate-900 text-white"
-                >
-                  {copiedField === "private-gallery" ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      Copiado
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      Copiar galeria privada
-                    </>
-                  )}
-                </ActionButton>
-
-                <Link
-                  to={`/evento/${event.slug}/galeria`}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  Ver galeria
-                </Link>
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-yellow-600" />
-                <p className="text-sm font-semibold text-slate-900">Galeria pública</p>
-              </div>
-
-              <p className="mt-3 break-all text-sm leading-6 text-slate-600">
-                {publicGalleryUrl}
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <ActionButton
-                  type="button"
-                  onClick={() => handleCopy(publicGalleryUrl, "public-gallery")}
-                  className="bg-slate-900 text-white"
-                >
-                  {copiedField === "public-gallery" ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      Copiado
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      Copiar galeria pública
-                    </>
-                  )}
-                </ActionButton>
-
-                <a
-                  href={publicGalleryUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Abrir pública
-                </a>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Link
-                to={`/evento/${event.slug}/configuracoes`}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
-              >
-                <Settings2 className="h-4 w-4" />
-                Editar evento
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-[28px] border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-6 text-center">
-          <div className="mx-auto flex w-fit items-center gap-2 rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
-            <QrCode className="h-4 w-4" />
-            QR Code do evento
-          </div>
-
-          <div className="mt-5">
-            {qrCodeUrl ? (
-              <img
-                src={qrCodeUrl}
-                alt={`QR Code do evento ${event.name}`}
-                className="mx-auto rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200"
-              />
-            ) : (
-              <div className="mx-auto flex h-[240px] w-[240px] items-center justify-center rounded-2xl bg-white ring-1 ring-slate-200">
-                <p className="text-sm text-slate-500">Gerando QR Code...</p>
-              </div>
-            )}
-          </div>
-
-          <p className="mx-auto mt-4 max-w-xs text-sm leading-6 text-slate-600">
-            Use esse QR Code nas mesas, convites ou materiais impressos para coletar fotos e vídeos dos convidados.
-          </p>
-
-          <div className="mt-5 flex flex-col gap-3">
-            <ActionButton
-              type="button"
-              onClick={() => handleCopy(uploadUrl, "qr")}
-              className="justify-center bg-slate-900 text-white"
-            >
-              {copiedField === "qr" ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Link copiado
-                </>
-              ) : (
-                <>
-                  <Copy className="h-4 w-4" />
-                  Copiar link do QR
-                </>
-              )}
-            </ActionButton>
-
-            {qrCodeUrl && (
-              <a
-                href={qrCodeUrl}
-                download={`qrcode-${event.slug}.png`}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900"
-              >
-                <Download className="h-4 w-4" />
-                Baixar QR Code
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+  cover_url: "",
+  logo_url: "",
+  primary_color: "#1e2440",
+  secondary_color: "#f6f7fb",
+  accent_color: "#b08968",
+  instructions: "",
+  is_upload_open: true,
+  partner_id: "",
+  partner_name: "",
+  event_date: "",
+};
 
 export default function Dashboard() {
-  const [user, setUser] = useState(null)
-  const [loadingUser, setLoadingUser] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState("")
-  const [events, setEvents] = useState([])
-  const [loadingEvents, setLoadingEvents] = useState(true)
-  const [form, setForm] = useState(initialForm)
+  const [authLoading, setAuthLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
 
-  const slug = useMemo(() => slugify(form.name), [form.name])
+  const [activeTab, setActiveTab] = useState("eventos");
 
-  useEffect(() => {
-    async function loadUser() {
-      const { data, error } = await supabase.auth.getUser()
+  const [events, setEvents] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
 
-      if (error) {
-        console.error("Erro ao obter usuário:", error)
-      }
+  const [partners, setPartners] = useState([]);
+  const [loadingPartners, setLoadingPartners] = useState(true);
 
-      setUser(data?.user ?? null)
-      setLoadingUser(false)
-    }
+  const [form, setForm] = useState(initialForm);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
 
-    loadUser()
-  }, [])
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
+  const [copiedKey, setCopiedKey] = useState("");
 
-  useEffect(() => {
-    if (!user) return
-    loadEvents(user.id)
-  }, [user])
+  const slug = useMemo(() => slugify(form.name || ""), [form.name]);
 
-  async function loadEvents(userId) {
-    setLoadingEvents(true)
+  const baseUrl =
+    typeof window !== "undefined" ? window.location.origin : "";
 
-    const { data: relations, error: relError } = await supabase
-      .from("event_users")
-      .select("event_id, role")
-      .eq("user_id", userId)
-
-    if (relError) {
-      console.error("Erro ao buscar relações:", relError)
-      setLoadingEvents(false)
-      return
-    }
-
-    if (!relations || relations.length === 0) {
-      setEvents([])
-      setLoadingEvents(false)
-      return
-    }
-
-    const eventIds = relations.map((r) => r.event_id)
-
-    const { data: eventsData, error: eventsError } = await supabase
-      .from("events")
-      .select("*")
-      .in("id", eventIds)
-      .order("created_at", { ascending: false })
-
-    if (eventsError) {
-      console.error("Erro ao buscar eventos:", eventsError)
-      setLoadingEvents(false)
-      return
-    }
-
-    const normalized = eventsData.map((event) => {
-      const relation = relations.find((r) => r.event_id === event.id)
-
+  const selectedLinks = useMemo(() => {
+    if (!selectedEvent?.slug) {
       return {
-        ...event,
-        role: relation?.role || "viewer",
+        uploadUrl: "",
+        privateGalleryUrl: "",
+        publicGalleryUrl: "",
+      };
+    }
+
+    return {
+      uploadUrl: `${baseUrl}/evento/${selectedEvent.slug}/upload`,
+      privateGalleryUrl: `${baseUrl}/evento/${selectedEvent.slug}/galeria`,
+      publicGalleryUrl: `${baseUrl}/galeria/${selectedEvent.slug}`,
+    };
+  }, [selectedEvent, baseUrl]);
+
+  useEffect(() => {
+    loadSession();
+  }, []);
+
+  useEffect(() => {
+    if (selectedEvent?.slug) {
+      generateQrCode(`${baseUrl}/evento/${selectedEvent.slug}/upload`);
+    } else {
+      setQrCodeDataUrl("");
+    }
+  }, [selectedEvent, baseUrl]);
+
+  async function loadSession() {
+    try {
+      setAuthLoading(true);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+
+      if (!user) {
+        setUser(null);
+        setProfile(null);
+        setAuthLoading(false);
+        return;
       }
-    })
 
-    setEvents(normalized)
-    setLoadingEvents(false)
+      setUser(user);
+
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select('*')
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) throw profileError;
+
+      setProfile(profileData || null);
+
+      await Promise.all([loadEvents(), loadPartners()]);
+    } catch (error) {
+      console.error("Erro ao carregar sessão:", error);
+      setMessage("Erro ao carregar sessão do usuário.");
+    } finally {
+      setAuthLoading(false);
+    }
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    window.location.href = "/login"
+  async function loadEvents() {
+    try {
+      setLoadingEvents(true);
+
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      setEvents(data || []);
+
+      if (data?.length) {
+        setSelectedEvent((current) => {
+          if (!current) return data[0];
+          const stillExists = data.find((item) => item.id === current.id);
+          return stillExists || data[0];
+        });
+      } else {
+        setSelectedEvent(null);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar eventos:", error);
+      setMessage("Erro ao carregar eventos.");
+    } finally {
+      setLoadingEvents(false);
+    }
   }
 
-  function handleChange(field, value) {
+  async function loadPartners() {
+    try {
+      setLoadingPartners(true);
+
+      const { data, error } = await supabase
+        .from("partners")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      setPartners(data || []);
+    } catch (error) {
+      console.error("Erro ao carregar parceiros:", error);
+      setMessage("Erro ao carregar parceiros.");
+    } finally {
+      setLoadingPartners(false);
+    }
+  }
+
+  async function generateQrCode(text) {
+    try {
+      const url = await QRCode.toDataURL(text, {
+        width: 300,
+        margin: 2,
+      });
+      setQrCodeDataUrl(url);
+    } catch (error) {
+      console.error("Erro ao gerar QR Code:", error);
+      setQrCodeDataUrl("");
+    }
+  }
+
+  function handleChange(event) {
+    const { name, value, type, checked } = event.target;
+
     setForm((prev) => ({
       ...prev,
-      [field]: value,
-    }))
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  }
+
+  function handlePartnerChange(event) {
+    const value = event.target.value;
+    const partner = partners.find((item) => item.id === value);
+
+    setForm((prev) => ({
+      ...prev,
+      partner_id: value,
+      partner_name: partner?.studio_name || "",
+    }));
   }
 
   async function handleCreateEvent(e) {
-    e.preventDefault()
-    setMessage("")
+    e.preventDefault();
 
     if (!form.name.trim()) {
-      setMessage("Informe o nome do evento.")
-      return
+      setMessage("Informe o nome do evento.");
+      return;
     }
 
     if (!slug) {
-      setMessage("Não foi possível gerar o slug do evento.")
-      return
+      setMessage("Não foi possível gerar o slug do evento.");
+      return;
     }
 
-    setSaving(true)
+    try {
+      setSaving(true);
+      setMessage("");
 
-    const { error } = await supabase.rpc("create_event_with_owner", {
-      p_slug: slug,
-      p_name: form.name.trim(),
-      p_description: form.description.trim() || null,
-      p_logo_url: null,
-      p_cover_url: null,
-      p_primary_color: form.primary_color,
-      p_secondary_color: form.secondary_color,
-      p_accent_color: form.accent_color,
-      p_instructions: form.instructions.trim() || null,
-    })
+      const payload = {
+        slug,
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        logo_url: form.logo_url.trim() || null,
+        cover_url: form.cover_url.trim() || null,
+        primary_color: form.primary_color,
+        secondary_color: form.secondary_color,
+        accent_color: form.accent_color,
+        instructions: form.instructions.trim() || null,
+        is_upload_open: form.is_upload_open,
+        created_by: user?.id || null,
+        partner_id: form.partner_id || null,
+        partner_name: form.partner_name || null,
+        event_date: form.event_date || null,
+      };
 
-    if (error) {
-      console.error("Erro ao criar evento:", error)
-      setMessage(error.message)
-      setSaving(false)
-      return
+      const { data, error } = await supabase
+        .from("events")
+        .insert([payload])
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setForm(initialForm);
+      setMessage("Evento criado com sucesso.");
+      await loadEvents();
+
+      if (data) {
+        setSelectedEvent(data);
+      }
+    } catch (error) {
+      console.error("Erro ao criar evento:", error);
+      setMessage(error.message || "Erro ao criar evento.");
+    } finally {
+      setSaving(false);
     }
-
-    setMessage("Evento criado com sucesso.")
-    setForm(initialForm)
-    await loadEvents(user.id)
-    setSaving(false)
   }
 
-  if (loadingUser) {
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
+  async function copyText(text, key) {
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(""), 1800);
+    } catch (error) {
+      console.error("Erro ao copiar:", error);
+    }
+  }
+
+  async function downloadQr() {
+    if (!qrCodeDataUrl || !selectedEvent?.slug) return;
+
+    const a = document.createElement("a");
+    a.href = qrCodeDataUrl;
+    a.download = `qr-${selectedEvent.slug}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  if (authLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <p className="text-slate-600">Carregando...</p>
-      </main>
-    )
+      <div style={styles.centerScreen}>
+        <p>Carregando painel...</p>
+      </div>
+    );
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
 
+  if (profile && profile.role === "partner") {
+    return <Navigate to="/meus-eventos" replace />;
+  }
+
+  const adminName =
+    profile?.["full-name"] || profile?.full_name || user.email || "Administrador";
+
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-100 p-4 sm:p-6">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.08),transparent_20%),radial-gradient(circle_at_left,rgba(15,23,42,0.05),transparent_18%)]" />
-
-      <div className="relative mx-auto max-w-7xl space-y-6">
-        <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
-          <div className="grid gap-8 p-6 sm:p-8 xl:grid-cols-[1.1fr_0.9fr]">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
-                <Sparkles className="h-4 w-4" />
-                Painel premium
-              </div>
-
-              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-                Gerencie seus eventos com uma experiência mais refinada.
-              </h1>
-
-              <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
-                Crie páginas personalizadas, gere QR Codes, acompanhe galerias e transforme a experiência dos convidados em uma entrega elegante e profissional.
-              </p>
-
-              <p className="mt-5 text-sm text-slate-500">
-                Logado como: {user.email}
-              </p>
-
-              <div className="mt-6">
-                <button
-                  onClick={handleLogout}
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sair
-                </button>
-              </div>
+    <div style={styles.page}>
+      <aside style={styles.sidebar}>
+        <div>
+          <div style={styles.brand}>
+            <div style={styles.brandIcon}>
+              <LayoutDashboard size={18} />
             </div>
-
-            <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
-              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-yellow-600">Eventos</p>
-                <p className="mt-2 text-3xl font-bold text-slate-900">{events.length}</p>
-                <p className="mt-2 text-sm text-slate-600">Eventos vinculados à sua conta</p>
-              </div>
-
-              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-yellow-600">Links públicos</p>
-                <p className="mt-2 text-3xl font-bold text-slate-900">QR</p>
-                <p className="mt-2 text-sm text-slate-600">Prontos para compartilhar e imprimir</p>
-              </div>
-
-              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm font-medium text-yellow-600">Galerias</p>
-                <p className="mt-2 text-3xl font-bold text-slate-900">Live</p>
-                <p className="mt-2 text-sm text-slate-600">Privadas e públicas no mesmo sistema</p>
-              </div>
+            <div>
+              <div style={styles.brandTitle}>Painel L’Amour</div>
+              <div style={styles.brandSubtitle}>Administração</div>
             </div>
           </div>
-        </section>
 
-        <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <article className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <div className="mb-6">
-              <div className="inline-flex items-center gap-2 rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
-                <PlusCircle className="h-4 w-4" />
-                Novo evento
-              </div>
+          <div style={styles.menu}>
+            <button
+              type="button"
+              onClick={() => setActiveTab("eventos")}
+              style={{
+                ...styles.menuButton,
+                ...(activeTab === "eventos" ? styles.menuButtonActive : {}),
+              }}
+            >
+              <CalendarDays size={18} />
+              Eventos
+            </button>
 
-              <h2 className="mt-4 text-2xl font-bold text-slate-900">
-                Criar evento
-              </h2>
-              <p className="mt-2 text-slate-600">
-                Defina nome, descrição, identidade visual e inicie um novo fluxo de coleta para seus convidados.
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("parceiros")}
+              style={{
+                ...styles.menuButton,
+                ...(activeTab === "parceiros" ? styles.menuButtonActive : {}),
+              }}
+            >
+              <Users size={18} />
+              Parceiros
+            </button>
+          </div>
+        </div>
 
-            <form onSubmit={handleCreateEvent} className="space-y-5">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Nome do evento
-                </label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => handleChange("name", e.target.value)}
-                  placeholder="Ex.: Casamento Deni & Fernanda"
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                />
-              </div>
+        <div style={styles.sidebarFooter}>
+          <div style={styles.adminBox}>
+            <strong style={styles.adminName}>{adminName}</strong>
+            <span style={styles.adminEmail}>{user.email}</span>
+          </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Slug gerado automaticamente
-                </label>
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-slate-600">
-                  {slug || "O slug aparecerá aqui"}
+          <button type="button" onClick={handleLogout} style={styles.logoutButton}>
+            <LogOut size={16} />
+            Sair
+          </button>
+        </div>
+      </aside>
+
+      <main style={styles.main}>
+        {message ? <div style={styles.alert}>{message}</div> : null}
+
+        {activeTab === "eventos" && (
+          <div style={styles.contentGrid}>
+            <section style={styles.card}>
+              <div style={styles.sectionHeader}>
+                <div>
+                  <p style={styles.kicker}>Administração</p>
+                  <h1 style={styles.title}>Criar novo evento</h1>
+                  <p style={styles.subtitle}>
+                    Crie eventos, vincule a um fotógrafo parceiro e gere links prontos.
+                  </p>
                 </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Descrição
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => handleChange("description", e.target.value)}
-                  rows={4}
-                  placeholder="Uma mensagem curta para os convidados."
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                />
-              </div>
+              <form onSubmit={handleCreateEvent} style={styles.formGrid}>
+                <Field label="Nome do evento" required>
+                  <input
+                    type="text"
+                    name="name"
+                    value={form.name}
+                    onChange={handleChange}
+                    style={styles.input}
+                    placeholder="Ex: Casamento Ana & Pedro"
+                  />
+                </Field>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Instruções da página pública
-                </label>
-                <textarea
-                  value={form.instructions}
-                  onChange={(e) => handleChange("instructions", e.target.value)}
-                  rows={3}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
-                />
-              </div>
+                <Field label="Slug gerado">
+                  <input
+                    type="text"
+                    value={slug}
+                    readOnly
+                    style={{ ...styles.input, background: "#f6f7fb" }}
+                    placeholder="slug-do-evento"
+                  />
+                </Field>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Cor principal
-                  </label>
+                <Field label="Data do evento">
+                  <input
+                    type="date"
+                    name="event_date"
+                    value={form.event_date}
+                    onChange={handleChange}
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Fotógrafo parceiro">
+                  <select
+                    name="partner_id"
+                    value={form.partner_id}
+                    onChange={handlePartnerChange}
+                    style={styles.input}
+                  >
+                    <option value="">Nenhum parceiro vinculado</option>
+                    {partners.map((partner) => (
+                      <option key={partner.id} value={partner.id}>
+                        {partner.studio_name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="URL da capa">
+                  <input
+                    type="text"
+                    name="cover_url"
+                    value={form.cover_url}
+                    onChange={handleChange}
+                    style={styles.input}
+                    placeholder="https://..."
+                  />
+                </Field>
+
+                <Field label="URL da logo">
+                  <input
+                    type="text"
+                    name="logo_url"
+                    value={form.logo_url}
+                    onChange={handleChange}
+                    style={styles.input}
+                    placeholder="https://..."
+                  />
+                </Field>
+
+                <Field label="Cor principal">
                   <input
                     type="color"
+                    name="primary_color"
                     value={form.primary_color}
-                    onChange={(e) => handleChange("primary_color", e.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-300 bg-white"
+                    onChange={handleChange}
+                    style={styles.colorInput}
                   />
-                </div>
+                </Field>
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Cor secundária
-                  </label>
+                <Field label="Cor secundária">
                   <input
                     type="color"
+                    name="secondary_color"
                     value={form.secondary_color}
-                    onChange={(e) => handleChange("secondary_color", e.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-300 bg-white"
+                    onChange={handleChange}
+                    style={styles.colorInput}
                   />
-                </div>
+                </Field>
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Cor de destaque
-                  </label>
+                <Field label="Cor de destaque">
                   <input
                     type="color"
+                    name="accent_color"
                     value={form.accent_color}
-                    onChange={(e) => handleChange("accent_color", e.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-300 bg-white"
+                    onChange={handleChange}
+                    style={styles.colorInput}
                   />
+                </Field>
+
+                <div style={styles.fullWidth}>
+                  <Field label="Descrição">
+                    <textarea
+                      name="description"
+                      value={form.description}
+                      onChange={handleChange}
+                      style={styles.textarea}
+                      placeholder="Descrição do evento"
+                    />
+                  </Field>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex rounded-2xl bg-slate-900 px-5 py-3 font-medium text-white"
-              >
-                {saving ? "Criando evento..." : "Criar evento"}
-              </button>
-
-              {message && <p className="text-sm text-slate-600">{message}</p>}
-            </form>
-          </article>
-
-          <aside className="space-y-6">
-            <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-              <div className="mb-5">
-                <p className="text-sm font-medium text-yellow-600">Eventos cadastrados</p>
-                <h2 className="mt-2 text-2xl font-bold text-slate-900">
-                  Seus eventos
-                </h2>
-                <p className="mt-2 text-slate-600">
-                  Acesse QR Codes, links públicos e configurações em um só lugar.
-                </p>
-              </div>
-
-              {loadingEvents ? (
-                <p className="text-slate-600">Carregando eventos...</p>
-              ) : events.length === 0 ? (
-                <p className="text-slate-600">Você ainda não criou nenhum evento.</p>
-              ) : (
-                <div className="space-y-6">
-                  {events.map((event) => (
-                    <EventCard key={event.id} event={event} />
-                  ))}
+                <div style={styles.fullWidth}>
+                  <Field label="Instruções">
+                    <textarea
+                      name="instructions"
+                      value={form.instructions}
+                      onChange={handleChange}
+                      style={styles.textarea}
+                      placeholder="Orientações para convidados ou equipe"
+                    />
+                  </Field>
                 </div>
-              )}
+
+                <div style={styles.fullWidth}>
+                  <label style={styles.checkboxRow}>
+                    <input
+                      type="checkbox"
+                      name="is_upload_open"
+                      checked={form.is_upload_open}
+                      onChange={handleChange}
+                    />
+                    Upload aberto para convidados
+                  </label>
+                </div>
+
+                <div style={styles.fullWidth}>
+                  <button type="submit" style={styles.primaryButton} disabled={saving}>
+                    <PlusCircle size={18} />
+                    {saving ? "Salvando..." : "Criar evento"}
+                  </button>
+                </div>
+              </form>
             </section>
-          </aside>
-        </section>
-      </div>
-    </main>
-  )
+
+            <section style={styles.rightColumn}>
+              <div style={styles.card}>
+                <div style={styles.sectionHeaderSmall}>
+                  <div>
+                    <p style={styles.kicker}>Eventos</p>
+                    <h2 style={styles.sectionTitle}>Eventos criados</h2>
+                  </div>
+                </div>
+
+                {loadingEvents ? (
+                  <p>Carregando eventos...</p>
+                ) : events.length === 0 ? (
+                  <p>Nenhum evento cadastrado ainda.</p>
+                ) : (
+                  <div style={styles.eventList}>
+                    {events.map((event) => (
+                      <button
+                        key={event.id}
+                        type="button"
+                        onClick={() => setSelectedEvent(event)}
+                        style={{
+                          ...styles.eventItem,
+                          ...(selectedEvent?.id === event.id
+                            ? styles.eventItemActive
+                            : {}),
+                        }}
+                      >
+                        <div>
+                          <strong style={styles.eventName}>{event.name}</strong>
+                          <div style={styles.eventMeta}>
+                            {event.partner_name || "Sem parceiro"} • {event.slug}
+                          </div>
+                        </div>
+
+                        {event.is_upload_open ? (
+                          <CheckCircle2 size={18} color="#2e8b57" />
+                        ) : (
+                          <Globe size={18} color="#999" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={styles.card}>
+                <div style={styles.sectionHeaderSmall}>
+                  <div>
+                    <p style={styles.kicker}>Resumo</p>
+                    <h2 style={styles.sectionTitle}>Links do evento</h2>
+                  </div>
+                </div>
+
+                {!selectedEvent ? (
+                  <p>Selecione um evento para ver os links e o QR Code.</p>
+                ) : (
+                  <>
+                    <InfoBox label="Evento" value={selectedEvent.name} />
+                    <InfoBox label="Slug" value={selectedEvent.slug} />
+                    <InfoBox
+                      label="Parceiro"
+                      value={selectedEvent.partner_name || "Sem parceiro"}
+                    />
+
+                    <LinkBox
+                      icon={<Link2 size={16} />}
+                      title="Link público de upload"
+                      url={selectedLinks.uploadUrl}
+                      onCopy={() => copyText(selectedLinks.uploadUrl, "upload")}
+                      copied={copiedKey === "upload"}
+                    />
+
+                    <LinkBox
+                      icon={<ExternalLink size={16} />}
+                      title="Galeria privada"
+                      url={selectedLinks.privateGalleryUrl}
+                      onCopy={() =>
+                        copyText(selectedLinks.privateGalleryUrl, "private")
+                      }
+                      copied={copiedKey === "private"}
+                    />
+
+                    <LinkBox
+                      icon={<Globe size={16} />}
+                      title="Galeria pública"
+                      url={selectedLinks.publicGalleryUrl}
+                      onCopy={() =>
+                        copyText(selectedLinks.publicGalleryUrl, "public")
+                      }
+                      copied={copiedKey === "public"}
+                    />
+
+                    <div style={styles.qrCard}>
+                      <div style={styles.qrHeader}>
+                        <QrCode size={18} />
+                        <strong>QR Code do upload</strong>
+                      </div>
+
+                      <div style={styles.qrPreview}>
+                        {qrCodeDataUrl ? (
+                          <img
+                            src={qrCodeDataUrl}
+                            alt="QR Code do evento"
+                            style={styles.qrImage}
+                          />
+                        ) : (
+                          <span>Sem QR Code</span>
+                        )}
+                      </div>
+
+                      <div style={styles.qrActions}>
+                        <button
+                          type="button"
+                          onClick={() => copyText(selectedLinks.uploadUrl, "qrlink")}
+                          style={styles.secondaryButton}
+                        >
+                          <Copy size={16} />
+                          {copiedKey === "qrlink" ? "Copiado!" : "Copiar link"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={downloadQr}
+                          style={styles.secondaryButton}
+                        >
+                          <Download size={16} />
+                          Baixar QR
+                        </button>
+                      </div>
+
+                      <div style={styles.qrActions}>
+                        <a
+                          href={selectedLinks.uploadUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={styles.linkButton}
+                        >
+                          <ExternalLink size={16} />
+                          Abrir upload
+                        </a>
+
+                        <Link
+                          to={`/evento/${selectedEvent.slug}/configuracoes`}
+                          style={styles.linkButton}
+                        >
+                          Configurações
+                        </Link>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {activeTab === "parceiros" && <PartnersPage />}
+      </main>
+    </div>
+  );
 }
+
+function Field({ label, children, required = false }) {
+  return (
+    <label style={styles.field}>
+      <span style={styles.label}>
+        {label} {required ? <span style={styles.required}>*</span> : null}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function InfoBox({ label, value }) {
+  return (
+    <div style={styles.infoBox}>
+      <span style={styles.infoLabel}>{label}</span>
+      <strong style={styles.infoValue}>{value || "—"}</strong>
+    </div>
+  );
+}
+
+function LinkBox({ icon, title, url, onCopy, copied }) {
+  return (
+    <div style={styles.linkBox}>
+      <div style={styles.linkBoxTitle}>
+        <span style={styles.linkIcon}>{icon}</span>
+        <strong>{title}</strong>
+      </div>
+
+      <div style={styles.linkUrl}>{url}</div>
+
+      <div style={styles.linkActions}>
+        <button type="button" onClick={onCopy} style={styles.secondaryButton}>
+          <Copy size={16} />
+          {copied ? "Copiado!" : "Copiar"}
+        </button>
+
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          style={styles.linkButton}
+        >
+          <ExternalLink size={16} />
+          Abrir
+        </a>
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    display: "grid",
+    gridTemplateColumns: "280px 1fr",
+    background: "#f6f7fb",
+  },
+  centerScreen: {
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    background: "#f6f7fb",
+    color: "#29314d",
+  },
+  sidebar: {
+    background: "#1e2440",
+    color: "#fff",
+    padding: "24px 18px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    gap: "24px",
+  },
+  brand: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    marginBottom: "28px",
+  },
+  brandIcon: {
+    width: "42px",
+    height: "42px",
+    borderRadius: "14px",
+    background: "rgba(255,255,255,0.12)",
+    display: "grid",
+    placeItems: "center",
+  },
+  brandTitle: {
+    fontWeight: 800,
+    fontSize: "16px",
+  },
+  brandSubtitle: {
+    fontSize: "13px",
+    opacity: 0.72,
+  },
+  menu: {
+    display: "grid",
+    gap: "10px",
+  },
+  menuButton: {
+    border: "none",
+    background: "transparent",
+    color: "rgba(255,255,255,0.82)",
+    padding: "14px 14px",
+    borderRadius: "14px",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    fontWeight: 700,
+    cursor: "pointer",
+    textAlign: "left",
+  },
+  menuButtonActive: {
+    background: "rgba(255,255,255,0.12)",
+    color: "#fff",
+  },
+  sidebarFooter: {
+    display: "grid",
+    gap: "12px",
+  },
+  adminBox: {
+    background: "rgba(255,255,255,0.08)",
+    borderRadius: "16px",
+    padding: "14px",
+    display: "grid",
+    gap: "4px",
+  },
+  adminName: {
+    fontSize: "14px",
+  },
+  adminEmail: {
+    fontSize: "12px",
+    opacity: 0.75,
+    wordBreak: "break-word",
+  },
+  logoutButton: {
+    height: "44px",
+    borderRadius: "12px",
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "transparent",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+  main: {
+    padding: "24px",
+  },
+  alert: {
+    marginBottom: "18px",
+    background: "#fff7e6",
+    color: "#ddce00",
+    border: "1px solid #f0d999",
+    borderRadius: "14px",
+    padding: "12px 14px",
+  },
+  contentGrid: {
+    display: "grid",
+    gridTemplateColumns: "1.25fr 0.95fr",
+    gap: "20px",
+    alignItems: "start",
+  },
+  rightColumn: {
+    display: "grid",
+    gap: "20px",
+  },
+  card: {
+    background: "#fff",
+    border: "1px solid #ececf3",
+    borderRadius: "24px",
+    padding: "22px",
+    boxShadow: "0 12px 30px rgba(24, 32, 79, 0.06)",
+  },
+  sectionHeader: {
+    marginBottom: "18px",
+  },
+  sectionHeaderSmall: {
+    marginBottom: "16px",
+  },
+  kicker: {
+    margin: 0,
+    color: "#ddce00",
+    fontWeight: 700,
+    fontSize: "13px",
+  },
+  title: {
+    margin: "6px 0 8px",
+    fontSize: "30px",
+    color: "#1f2333",
+  },
+  sectionTitle: {
+    margin: "6px 0 0",
+    fontSize: "22px",
+    color: "#1f2333",
+  },
+  subtitle: {
+    margin: 0,
+    color: "#687086",
+    fontSize: "14px",
+    lineHeight: 1.5,
+  },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "14px",
+  },
+  fullWidth: {
+    gridColumn: "1 / -1",
+  },
+  field: {
+    display: "grid",
+    gap: "6px",
+  },
+  label: {
+    color: "#42485c",
+    fontWeight: 700,
+    fontSize: "14px",
+  },
+  required: {
+    color: "#d9534f",
+  },
+  input: {
+    height: "46px",
+    borderRadius: "12px",
+    border: "1px solid #dfe3ec",
+    padding: "0 12px",
+    outline: "none",
+    fontSize: "14px",
+  },
+  colorInput: {
+    width: "100%",
+    height: "46px",
+    borderRadius: "12px",
+    border: "1px solid #dfe3ec",
+    padding: "4px",
+    background: "#fff",
+  },
+  textarea: {
+    minHeight: "100px",
+    borderRadius: "12px",
+    border: "1px solid #dfe3ec",
+    padding: "12px",
+    resize: "vertical",
+    outline: "none",
+    fontSize: "14px",
+    fontFamily: "inherit",
+  },
+  checkboxRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    fontSize: "14px",
+    color: "#42485c",
+    fontWeight: 600,
+  },
+  primaryButton: {
+    height: "48px",
+    border: "none",
+    borderRadius: "14px",
+    background: "#1e2440",
+    color: "#fff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    cursor: "pointer",
+    fontWeight: 800,
+    padding: "0 18px",
+  },
+  secondaryButton: {
+    height: "40px",
+    border: "1px solid #dfe3ec",
+    borderRadius: "12px",
+    background: "#fff",
+    color: "#29314d",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    cursor: "pointer",
+    fontWeight: 700,
+    padding: "0 14px",
+  },
+  linkButton: {
+    height: "40px",
+    border: "1px solid #dfe3ec",
+    borderRadius: "12px",
+    background: "#fff",
+    color: "#29314d",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    textDecoration: "none",
+    fontWeight: 700,
+    padding: "0 14px",
+  },
+  eventList: {
+    display: "grid",
+    gap: "10px",
+  },
+  eventItem: {
+    width: "100%",
+    border: "1px solid #ececf3",
+    borderRadius: "14px",
+    background: "#fafbff",
+    padding: "14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+    cursor: "pointer",
+    textAlign: "left",
+  },
+  eventItemActive: {
+    border: "1px solid #ddce00",
+    background: "#fff8f3",
+  },
+  eventName: {
+    display: "block",
+    color: "#1f2333",
+    marginBottom: "4px",
+  },
+  eventMeta: {
+    fontSize: "13px",
+    color: "#687086",
+    wordBreak: "break-word",
+  },
+  infoBox: {
+    background: "#f8f9fd",
+    border: "1px solid #ececf3",
+    borderRadius: "14px",
+    padding: "12px 14px",
+    marginBottom: "10px",
+  },
+  infoLabel: {
+    display: "block",
+    fontSize: "11px",
+    color: "#8a90a3",
+    textTransform: "uppercase",
+    letterSpacing: ".05em",
+    marginBottom: "5px",
+  },
+  infoValue: {
+    color: "#23283a",
+    fontSize: "14px",
+    wordBreak: "break-word",
+  },
+  linkBox: {
+    background: "#f8f9fd",
+    border: "1px solid #ececf3",
+    borderRadius: "16px",
+    padding: "14px",
+    marginBottom: "12px",
+  },
+  linkBoxTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "10px",
+    color: "#1f2333",
+  },
+  linkIcon: {
+    display: "inline-flex",
+    color: "#ddce00",
+  },
+  linkUrl: {
+    background: "#fff",
+    border: "1px solid #e7eaf2",
+    borderRadius: "12px",
+    padding: "10px 12px",
+    fontSize: "13px",
+    color: "#48506a",
+    wordBreak: "break-word",
+    marginBottom: "10px",
+  },
+  linkActions: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+  qrCard: {
+    marginTop: "12px",
+    background: "#f8f9fd",
+    border: "1px solid #ececf3",
+    borderRadius: "18px",
+    padding: "16px",
+  },
+  qrHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "12px",
+    color: "#1f2333",
+  },
+  qrPreview: {
+    background: "#fff",
+    border: "1px solid #e7eaf2",
+    borderRadius: "16px",
+    minHeight: "220px",
+    display: "grid",
+    placeItems: "center",
+    padding: "12px",
+    marginBottom: "12px",
+  },
+  qrImage: {
+    width: "100%",
+    maxWidth: "220px",
+    height: "auto",
+    display: "block",
+  },
+  qrActions: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+    marginBottom: "10px",
+  },
+};

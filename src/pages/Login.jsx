@@ -1,207 +1,509 @@
-import { useState } from "react"
-import { Eye, EyeOff, Lock, Mail, Sparkles } from "lucide-react"
-import { supabase } from "../lib/supabase"
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff, Camera, UserPlus, LogIn } from "lucide-react";
+import { supabase } from "../lib/supabaseClient";
 
 export default function Login() {
-  const [mode, setMode] = useState("login")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState("")
-  const [error, setError] = useState("")
+  const navigate = useNavigate();
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setLoading(true)
-    setMessage("")
-    setError("")
+  const [mode, setMode] = useState("login"); // login | register
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [loginForm, setLoginForm] = useState({
+    email: "",
+    password: "",
+  });
+
+  const [registerForm, setRegisterForm] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+  });
+
+  function handleLoginChange(e) {
+    const { name, value } = e.target;
+    setLoginForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function handleRegisterChange(e) {
+    const { name, value } = e.target;
+    setRegisterForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function getPartnerByEmail(email) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const { data, error } = await supabase
+      .from("partners")
+      .select("*")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return data || null;
+  }
+
+  async function getProfileById(userId) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select('*')
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return data || null;
+  }
+
+  async function createProfileIfMissing(user, fullNameFallback = "") {
+    const existingProfile = await getProfileById(user.id);
+    if (existingProfile) return existingProfile;
+
+    const partner = await getPartnerByEmail(user.email || "");
+    const role = partner ? "partner" : "partner";
+
+    const payload = {
+      id: user.id,
+       email: (user.email || "").toLowerCase(),
+      role,
+      active: true,
+       full_name:
+       fullNameFallback?.trim() ||
+       user.user_metadata?.full_name ||
+       user.user_metadata?.name ||
+       "",
+    };
+
+    const { error } = await supabase.from("profiles").insert([payload]);
+    if (error) throw error;
+
+    return payload;
+  }
+
+  async function vincularParceiro(user) {
+    if (!user?.email) return null;
+
+    const normalizedEmail = user.email.trim().toLowerCase();
+
+    const { data: partner, error: partnerError } = await supabase
+      .from("partners")
+      .select("*")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
+
+    if (partnerError) {
+      throw partnerError;
+    }
+
+    if (partner && !partner.profile_id) {
+      const { error: updateError } = await supabase
+        .from("partners")
+        .update({ profile_id: user.id })
+        .eq("id", partner.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+    }
+
+    return partner || null;
+  }
+
+  async function syncUserAccess(user, fullNameFallback = "") {
+    await vincularParceiro(user);
+
+    let profile = await getProfileById(user.id);
+
+    if (!profile) {
+      profile = await createProfileIfMissing(user, fullNameFallback);
+    }
+
+    // Se existir parceiro com o email, garantimos role partner
+    // sem sobrescrever admin.
+    const partner = await getPartnerByEmail(user.email || "");
+
+    if (partner && profile.role !== "admin") {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ role: "partner", active: true })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      profile = { ...profile, role: "partner", active: true };
+    }
+
+    return profile;
+  }
+
+  function redirectByRole(profile) {
+    if (profile?.role === "admin") {
+      navigate("/painel", { replace: true });
+      return;
+    }
+
+    navigate("/meus-eventos", { replace: true });
+  }
+
+  async function handleLoginSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
 
     try {
-      if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        })
+      const email = loginForm.email.trim().toLowerCase();
+      const password = loginForm.password;
 
-        if (error) throw error
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-        setMessage("Conta criada com sucesso. Agora você já pode entrar.")
-        setMode("login")
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
+      if (error) throw error;
+      if (!data?.user) throw new Error("Não foi possível autenticar o usuário.");
 
-        if (error) throw error
-
-        window.location.href = "/painel"
-      }
-    } catch (err) {
-      setError(err.message || "Erro ao autenticar.")
+      const profile = await syncUserAccess(data.user);
+      redirectByRole(profile);
+    } catch (error) {
+      console.error("Erro no login:", error);
+      setMessage(error.message || "Erro ao fazer login.");
     } finally {
-      setLoading(false)
+      setLoading(false);
+    }
+  }
+
+  async function handleRegisterSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const fullName = registerForm.fullName.trim();
+      const email = registerForm.email.trim().toLowerCase();
+      const password = registerForm.password;
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            name: fullName,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      if (!data?.user) {
+        throw new Error("Conta criada, mas não foi possível obter o usuário.");
+      }
+
+      const profile = await syncUserAccess(data.user, fullName);
+
+      setMessage("Conta criada com sucesso.");
+      redirectByRole(profile);
+    } catch (error) {
+      console.error("Erro no cadastro:", error);
+      setMessage(error.message || "Erro ao criar conta.");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.16),transparent_22%),radial-gradient(circle_at_left,rgba(255,255,255,0.06),transparent_18%),radial-gradient(circle_at_bottom,rgba(168,85,247,0.12),transparent_22%)]" />
-
-      <div className="relative grid w-full max-w-6xl overflow-hidden rounded-[32px] border border-white/10 bg-white/5 shadow-2xl backdrop-blur xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="hidden xl:flex xl:flex-col xl:justify-between xl:bg-white/6 xl:p-10">
+    <div style={styles.page}>
+      <div style={styles.card}>
+        <div style={styles.brand}>
+          <div style={styles.brandIcon}>
+            <Camera size={22} />
+          </div>
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm font-medium text-yellow-200">
-              <Sparkles className="h-4 w-4" />
-              Galeria L’Amour
-            </div>
-
-            <h1 className="mt-8 text-4xl font-bold tracking-tight text-white">
-              Acesse seu painel e gerencie seus eventos com elegância.
-            </h1>
-
-            <p className="mt-5 max-w-lg text-base leading-8 text-white/70">
-              Organize uploads, personalize páginas, gere QR Codes e acompanhe a galeria dos convidados em uma experiência mais profissional.
+            <h1 style={styles.title}>Galeria L’Amour</h1>
+            <p style={styles.subtitle}>
+              Acesse o painel administrativo ou a área do fotógrafo parceiro.
             </p>
           </div>
+        </div>
 
-          <div className="grid gap-4">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-              <p className="text-sm font-medium text-yellow-200">Recursos</p>
-              <ul className="mt-3 space-y-2 text-sm text-white/75">
-                <li>• QR Code por evento</li>
-                <li>• Upload de fotos e vídeos</li>
-                <li>• Galeria privada e pública</li>
-                <li>• Aprovação e moderação</li>
-              </ul>
-            </div>
-          </div>
-        </section>
+        <div style={styles.tabs}>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("login");
+              setMessage("");
+            }}
+            style={{
+              ...styles.tabButton,
+              ...(mode === "login" ? styles.tabButtonActive : {}),
+            }}
+          >
+            <LogIn size={16} />
+            Entrar
+          </button>
 
-        <section className="bg-white px-6 py-8 sm:px-10 sm:py-10">
-          <div className="mx-auto w-full max-w-md">
-            <div className="text-center xl:text-left">
-              <p className="text-sm font-medium text-yellow-600">Painel administrativo</p>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-                {mode === "login" ? "Entrar" : "Criar conta"}
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                {mode === "login"
-                  ? "Use seu email e senha para acessar o painel."
-                  : "Crie sua conta para começar a administrar seus eventos."}
-              </p>
-            </div>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("register");
+              setMessage("");
+            }}
+            style={{
+              ...styles.tabButton,
+              ...(mode === "register" ? styles.tabButtonActive : {}),
+            }}
+          >
+            <UserPlus size={16} />
+            Criar conta
+          </button>
+        </div>
 
-            <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Email
-                </label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seuemail@exemplo.com"
-                    className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-slate-900 outline-none transition focus:border-slate-900"
-                  />
-                </div>
+        {mode === "login" ? (
+          <form onSubmit={handleLoginSubmit} style={styles.form}>
+            <label style={styles.label}>
+              Email
+              <input
+                type="email"
+                name="email"
+                value={loginForm.email}
+                onChange={handleLoginChange}
+                style={styles.input}
+                placeholder="seuemail@exemplo.com"
+                required
+              />
+            </label>
+
+            <label style={styles.label}>
+              Senha
+              <div style={styles.passwordWrap}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={loginForm.password}
+                  onChange={handleLoginChange}
+                  style={styles.passwordInput}
+                  placeholder="Sua senha"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  style={styles.eyeButton}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
+            </label>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Senha
-                </label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Digite sua senha"
-                    className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-11 pr-12 text-slate-900 outline-none transition focus:border-slate-900"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-800"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
+            <button type="submit" style={styles.primaryButton} disabled={loading}>
+              {loading ? "Entrando..." : "Entrar"}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleRegisterSubmit} style={styles.form}>
+            <label style={styles.label}>
+              Nome completo
+              <input
+                type="text"
+                name="fullName"
+                value={registerForm.fullName}
+                onChange={handleRegisterChange}
+                style={styles.input}
+                placeholder="Seu nome"
+                required
+              />
+            </label>
+
+            <label style={styles.label}>
+              Email
+              <input
+                type="email"
+                name="email"
+                value={registerForm.email}
+                onChange={handleRegisterChange}
+                style={styles.input}
+                placeholder="seuemail@exemplo.com"
+                required
+              />
+            </label>
+
+            <label style={styles.label}>
+              Senha
+              <div style={styles.passwordWrap}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={registerForm.password}
+                  onChange={handleRegisterChange}
+                  style={styles.passwordInput}
+                  placeholder="Crie uma senha"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  style={styles.eyeButton}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
+            </label>
 
-              {message && (
-                <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-emerald-200">
-                  {message}
-                </div>
-              )}
+            <button type="submit" style={styles.primaryButton} disabled={loading}>
+              {loading ? "Criando conta..." : "Criar conta"}
+            </button>
+          </form>
+        )}
 
-              {error && (
-                <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200">
-                  {error}
-                </div>
-              )}
+        {message ? <div style={styles.message}>{message}</div> : null}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3.5 font-medium text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {loading
-                  ? mode === "login"
-                    ? "Entrando..."
-                    : "Criando conta..."
-                  : mode === "login"
-                  ? "Entrar no painel"
-                  : "Criar conta"}
-              </button>
-            </form>
-
-            <div className="mt-6 text-center text-sm text-slate-600 xl:text-left">
-              {mode === "login" ? (
-                <p>
-                  Ainda não tem conta?{" "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("signup")
-                      setMessage("")
-                      setError("")
-                    }}
-                    className="font-semibold text-yellow-600 transition hover:text-yellow-700"
-                  >
-                    Criar conta
-                  </button>
-                </p>
-              ) : (
-                <p>
-                  Já tem conta?{" "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("login")
-                      setMessage("")
-                      setError("")
-                    }}
-                    className="font-semibold text-yellow-600 transition hover:text-yellow-700"
-                  >
-                    Entrar
-                  </button>
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
+        <div style={styles.footerText}>
+          Admin entra no painel. Parceiros entram na área de eventos vinculados.
+        </div>
       </div>
-    </main>
-  )
+    </div>
+  );
 }
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    padding: "24px",
+    background:
+      "linear-gradient(135deg, #f7f3f1 0%, #f1f4fb 50%, #f8f8fc 100%)",
+  },
+  card: {
+    width: "100%",
+    maxWidth: "460px",
+    background: "#ffffff",
+    border: "1px solid #ececf3",
+    borderRadius: "28px",
+    padding: "28px",
+    boxShadow: "0 18px 50px rgba(24, 32, 79, 0.10)",
+  },
+  brand: {
+    display: "flex",
+    gap: "14px",
+    alignItems: "center",
+    marginBottom: "20px",
+  },
+  brandIcon: {
+    width: "52px",
+    height: "52px",
+    borderRadius: "18px",
+    background: "#1e2440",
+    color: "#fff",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+  },
+  title: {
+    margin: 0,
+    fontSize: "28px",
+    color: "#1f2333",
+  },
+  subtitle: {
+    margin: "6px 0 0",
+    color: "#6a7188",
+    fontSize: "14px",
+    lineHeight: 1.5,
+  },
+  tabs: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "10px",
+    marginBottom: "18px",
+  },
+  tabButton: {
+    height: "44px",
+    borderRadius: "14px",
+    border: "1px solid #e3e7ef",
+    background: "#f8f9fd",
+    color: "#49506a",
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+  },
+  tabButtonActive: {
+    background: "#1e2440",
+    color: "#fff",
+    border: "1px solid #1e2440",
+  },
+  form: {
+    display: "grid",
+    gap: "14px",
+  },
+  label: {
+    display: "grid",
+    gap: "6px",
+    color: "#3f4558",
+    fontWeight: 700,
+    fontSize: "14px",
+  },
+  input: {
+    height: "46px",
+    borderRadius: "14px",
+    border: "1px solid #dfe3ec",
+    padding: "0 14px",
+    outline: "none",
+    fontSize: "14px",
+  },
+  passwordWrap: {
+    display: "grid",
+    gridTemplateColumns: "1fr 46px",
+    border: "1px solid #dfe3ec",
+    borderRadius: "14px",
+    overflow: "hidden",
+    background: "#fff",
+  },
+  passwordInput: {
+    height: "46px",
+    border: "none",
+    padding: "0 14px",
+    outline: "none",
+    fontSize: "14px",
+  },
+  eyeButton: {
+    border: "none",
+    background: "#fff",
+    cursor: "pointer",
+    color: "#5f667d",
+  },
+  primaryButton: {
+    height: "48px",
+    borderRadius: "14px",
+    border: "none",
+    background: "#1e2440",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+    marginTop: "4px",
+  },
+  message: {
+    marginTop: "16px",
+    background: "#fff7e6",
+    border: "1px solid #f0d999",
+    color: "#775300",
+    borderRadius: "14px",
+    padding: "12px 14px",
+    fontSize: "14px",
+  },
+  footerText: {
+    marginTop: "16px",
+    color: "#7c8399",
+    fontSize: "13px",
+    textAlign: "center",
+  },
+};
