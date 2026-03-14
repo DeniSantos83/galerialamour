@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import QRCode from "qrcode";
+import PanelLoader from "../components/PanelLoader";
 import {
   Copy,
   ExternalLink,
@@ -14,6 +15,8 @@ import {
   LayoutDashboard,
   Users,
   CalendarDays,
+  Menu,
+  X,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { slugify } from "../lib/utils";
@@ -33,6 +36,24 @@ const initialForm = {
   partner_name: "",
   event_date: "",
 };
+
+function useWindowWidth() {
+  const getWidth = () =>
+    typeof window !== "undefined" ? window.innerWidth : 1280;
+
+  const [width, setWidth] = useState(getWidth);
+
+  useEffect(() => {
+    function handleResize() {
+      setWidth(getWidth());
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return width;
+}
 
 export default function Dashboard() {
   const [authLoading, setAuthLoading] = useState(true);
@@ -54,6 +75,11 @@ export default function Dashboard() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 900;
+  const isSmallMobile = windowWidth < 560;
 
   const slug = useMemo(() => slugify(form.name || ""), [form.name]);
 
@@ -110,7 +136,7 @@ export default function Dashboard() {
 
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select('*')
+        .select("*")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -135,13 +161,13 @@ export default function Dashboard() {
         .from("events")
         .select(`*, event_settings (*)`)
         .order("created_at", { ascending: false });
-        console.log("USER:", user);
-        console.log("EVENTS DATA:", data);
-        console.log("EVENTS ERROR:", error);
+
+      console.log("USER:", user);
+      console.log("EVENTS DATA:", data);
+      console.log("EVENTS ERROR:", error);
 
       if (error) throw error;
 
-      
       setEvents(data || []);
 
       if (data?.length) {
@@ -160,40 +186,7 @@ export default function Dashboard() {
       setLoadingEvents(false);
     }
   }
-  async function loadEvents() {
-  try {
-    setLoadingEvents(true);
 
-    const { data, error } = await supabase
-      .from("events")
-      .select(`*,event_settings (*)`)
-      .order("created_at", { ascending: false });
-
-    console.log("USER:", user);
-    console.log("EVENTS DATA:", data);
-    console.log("EVENTS ERROR:", error);
-
-    if (error) throw error;
-
-    setEvents(data || []);
-
-    if (data?.length) {
-      setSelectedEvent((current) => {
-        if (!current) return data[0];
-        const stillExists = data.find((item) => item.id === current.id);
-        return stillExists || data[0];
-      });
-    } else {
-      setSelectedEvent(null);
-    }
-
-  } catch (error) {
-    console.error("Erro ao carregar eventos:", error);
-    setMessage("Erro ao carregar eventos.");
-  } finally {
-    setLoadingEvents(false);
-  }
-}
   async function loadPartners() {
     try {
       setLoadingPartners(true);
@@ -248,117 +241,118 @@ export default function Dashboard() {
   }
 
   async function handleCreateEvent(e) {
-  e.preventDefault();
+    e.preventDefault();
 
-  if (!form.name.trim()) {
-    setMessage("Informe o nome do evento.");
-    return;
-  }
+    if (!form.name.trim()) {
+      setMessage("Informe o nome do evento.");
+      return;
+    }
 
-  const baseSlug = slugify(form.name);
-  if (!baseSlug) {
-    setMessage("Não foi possível gerar o slug do evento.");
-    return;
-  }
+    const baseSlug = slugify(form.name);
+    if (!baseSlug) {
+      setMessage("Não foi possível gerar o slug do evento.");
+      return;
+    }
 
-  async function generateUniqueSlug(base) {
-    let newSlug = base;
-    let counter = 1;
+    async function generateUniqueSlug(base) {
+      let newSlug = base;
+      let counter = 1;
 
-    while (true) {
-      const { data } = await supabase
+      while (true) {
+        const { data } = await supabase
+          .from("events")
+          .select("id")
+          .eq("slug", newSlug)
+          .maybeSingle();
+
+        if (!data) break;
+
+        newSlug = `${base}-${counter}`;
+        counter++;
+      }
+
+      return newSlug;
+    }
+
+    let createdEvent = null;
+
+    try {
+      setSaving(true);
+      setMessage("");
+
+      const uniqueSlug = await generateUniqueSlug(baseSlug);
+
+      const payload = {
+        slug: uniqueSlug,
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        logo_url: form.logo_url.trim() || null,
+        cover_url: form.cover_url.trim() || null,
+        primary_color: form.primary_color,
+        secondary_color: form.secondary_color,
+        accent_color: form.accent_color,
+        instructions: form.instructions.trim() || null,
+        is_upload_open: form.is_upload_open,
+        created_by: user?.id || null,
+        partner_id: form.partner_id || null,
+        partner_name: form.partner_name || null,
+        event_date: form.event_date || null,
+      };
+
+      const { data: insertedEvent, error: eventError } = await supabase
         .from("events")
-        .select("id")
-        .eq("slug", newSlug)
-        .maybeSingle();
+        .insert([payload])
+        .select("*")
+        .single();
 
-      if (!data) break;
+      if (eventError) throw eventError;
 
-      newSlug = `${base}-${counter}`;
-      counter++;
+      createdEvent = insertedEvent;
+
+      const { error: settingsError } = await supabase
+        .from("event_settings")
+        .insert([
+          {
+            event_id: createdEvent.id,
+            allow_videos: true,
+            max_photo_size_mb: 20,
+            max_video_size_mb: 80,
+            max_video_duration_seconds: 45,
+            require_guest_name: false,
+            gallery_mode: "private",
+          },
+        ]);
+
+      if (settingsError) throw settingsError;
+
+      const { error: eventUserError } = await supabase
+        .from("event_users")
+        .insert([
+          {
+            event_id: createdEvent.id,
+            user_id: user.id,
+            role: "owner",
+          },
+        ]);
+
+      if (eventUserError) throw eventUserError;
+
+      setForm(initialForm);
+      setMessage("Evento criado com sucesso.");
+      await loadEvents();
+      setSelectedEvent(createdEvent);
+      setActiveTab("eventos");
+    } catch (error) {
+      console.error("Erro ao criar evento:", error);
+      setMessage(error.message || "Erro ao criar evento.");
+
+      if (createdEvent?.id) {
+        await supabase.from("events").delete().eq("id", createdEvent.id);
+      }
+    } finally {
+      setSaving(false);
     }
-
-    return newSlug;
   }
-
-  let createdEvent = null;
-
-  try {
-    setSaving(true);
-    setMessage("");
-
-    const uniqueSlug = await generateUniqueSlug(baseSlug);
-
-    const payload = {
-      slug: uniqueSlug,
-      name: form.name.trim(),
-      description: form.description.trim() || null,
-      logo_url: form.logo_url.trim() || null,
-      cover_url: form.cover_url.trim() || null,
-      primary_color: form.primary_color,
-      secondary_color: form.secondary_color,
-      accent_color: form.accent_color,
-      instructions: form.instructions.trim() || null,
-      is_upload_open: form.is_upload_open,
-      created_by: user?.id || null,
-      partner_id: form.partner_id || null,
-      partner_name: form.partner_name || null,
-      event_date: form.event_date || null,
-    };
-
-    const { data: insertedEvent, error: eventError } = await supabase
-      .from("events")
-      .insert([payload])
-      .select("*")
-      .single();
-
-    if (eventError) throw eventError;
-
-    createdEvent = insertedEvent;
-
-    const { error: settingsError } = await supabase
-      .from("event_settings")
-      .insert([
-        {
-          event_id: createdEvent.id,
-          allow_videos: true,
-          max_photo_size_mb: 20,
-          max_video_size_mb: 80,
-          max_video_duration_seconds: 45,
-          require_guest_name: false,
-          gallery_mode: "private",
-        },
-      ]);
-
-    if (settingsError) throw settingsError;
-
-    const { error: eventUserError } = await supabase
-      .from("event_users")
-      .insert([
-        {
-          event_id: createdEvent.id,
-          user_id: user.id,
-          role: "owner",
-        },
-      ]);
-
-    if (eventUserError) throw eventUserError;
-
-    setForm(initialForm);
-    setMessage("Evento criado com sucesso.");
-    await loadEvents();
-    setSelectedEvent(createdEvent);
-  } catch (error) {
-    console.error("Erro ao criar evento:", error);
-    setMessage(error.message || "Erro ao criar evento.");
-
-    if (createdEvent?.id) {
-      await supabase.from("events").delete().eq("id", createdEvent.id);
-    }
-  } finally {
-    setSaving(false);
-  }
-}
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -389,12 +383,14 @@ export default function Dashboard() {
   }
 
   if (authLoading) {
-    return (
-      <div style={styles.centerScreen}>
-        <p>Carregando painel...</p>
-      </div>
-    );
-  }
+  return (
+    <PanelLoader
+      title="Carregando painel..."
+      subtitle="Aguarde enquanto buscamos seus eventos e configurações."
+      icon="dashboard"
+    />
+  );
+}
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -408,76 +404,151 @@ export default function Dashboard() {
     profile?.["full-name"] || profile?.full_name || user.email || "Administrador";
 
   return (
-    <div style={styles.page}>
-      <aside style={styles.sidebar}>
-        <div>
-          <div style={styles.brand}>
-            <div style={styles.brandIcon}>
+    <div
+      style={{
+        ...styles.page,
+        gridTemplateColumns: isMobile ? "1fr" : "280px 1fr",
+      }}
+    >
+      {isMobile && (
+        <div style={styles.mobileTopbar}>
+          <div style={styles.mobileBrandWrap}>
+            <div style={styles.mobileBrandIcon}>
               <LayoutDashboard size={18} />
             </div>
             <div>
               <div style={styles.brandTitle}>Painel L’Amour</div>
-              <div style={styles.brandSubtitle}>Administração</div>
+              <div style={styles.brandSubtitleDark}>Administração</div>
             </div>
           </div>
 
-          <div style={styles.menu}>
-            <button
-              type="button"
-              onClick={() => setActiveTab("eventos")}
-              style={{
-                ...styles.menuButton,
-                ...(activeTab === "eventos" ? styles.menuButtonActive : {}),
-              }}
-            >
-              <CalendarDays size={18} />
-              Eventos
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("parceiros")}
-              style={{
-                ...styles.menuButton,
-                ...(activeTab === "parceiros" ? styles.menuButtonActive : {}),
-              }}
-            >
-              <Users size={18} />
-              Parceiros
-            </button>
-          </div>
-        </div>
-
-        <div style={styles.sidebarFooter}>
-          <div style={styles.adminBox}>
-            <strong style={styles.adminName}>{adminName}</strong>
-            <span style={styles.adminEmail}>{user.email}</span>
-          </div>
-
-          <button type="button" onClick={handleLogout} style={styles.logoutButton}>
-            <LogOut size={16} />
-            Sair
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            style={styles.mobileMenuButton}
+            aria-label="Abrir menu"
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-      </aside>
+      )}
 
-      <main style={styles.main}>
+      {(!isMobile || mobileMenuOpen) && (
+        <aside
+          style={{
+            ...styles.sidebar,
+            ...(isMobile ? styles.sidebarMobile : {}),
+          }}
+        >
+          <div>
+            {!isMobile && (
+              <div style={styles.brand}>
+                <div style={styles.brandIcon}>
+                  <LayoutDashboard size={18} />
+                </div>
+                <div>
+                  <div style={styles.brandTitle}>Painel L’Amour</div>
+                  <div style={styles.brandSubtitle}>Administração</div>
+                </div>
+              </div>
+            )}
+
+            <div style={styles.menu}>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("eventos");
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  ...styles.menuButton,
+                  ...(activeTab === "eventos" ? styles.menuButtonActive : {}),
+                }}
+              >
+                <CalendarDays size={18} />
+                Eventos
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("parceiros");
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  ...styles.menuButton,
+                  ...(activeTab === "parceiros" ? styles.menuButtonActive : {}),
+                }}
+              >
+                <Users size={18} />
+                Parceiros
+              </button>
+            </div>
+          </div>
+
+          <div style={styles.sidebarFooter}>
+            <div style={styles.adminBox}>
+              <strong style={styles.adminName}>{adminName}</strong>
+              <span style={styles.adminEmail}>{user.email}</span>
+            </div>
+
+            <button type="button" onClick={handleLogout} style={styles.logoutButton}>
+              <LogOut size={16} />
+              Sair
+            </button>
+          </div>
+        </aside>
+      )}
+
+      <main
+        style={{
+          ...styles.main,
+          padding: isSmallMobile ? "14px" : isMobile ? "18px" : "24px",
+        }}
+      >
         {message ? <div style={styles.alert}>{message}</div> : null}
 
         {activeTab === "eventos" && (
-          <div style={styles.contentGrid}>
-            <section style={styles.card}>
+          <div
+            style={{
+              ...styles.contentGrid,
+              gridTemplateColumns: isMobile ? "1fr" : "1.25fr 0.95fr",
+            }}
+          >
+            <section
+              style={{
+                ...styles.card,
+                padding: isSmallMobile ? "16px" : "22px",
+              }}
+            >
               <div style={styles.sectionHeader}>
                 <div>
                   <p style={styles.kicker}>Administração</p>
-                  <h1 style={styles.title}>Criar novo evento</h1>
+                  <h1
+                    style={{
+                      ...styles.title,
+                      fontSize: isSmallMobile ? "24px" : isMobile ? "27px" : "30px",
+                    }}
+                  >
+                    Criar novo evento
+                  </h1>
                   <p style={styles.subtitle}>
                     Crie eventos, vincule a um fotógrafo parceiro e gere links prontos.
                   </p>
                 </div>
               </div>
 
-              <form onSubmit={handleCreateEvent} style={styles.formGrid}>
+              <form
+                onSubmit={handleCreateEvent}
+                style={{
+                  ...styles.formGrid,
+                  gridTemplateColumns: isSmallMobile
+                    ? "1fr"
+                    : isMobile
+                    ? "1fr"
+                    : "repeat(2, minmax(0, 1fr))",
+                }}
+              >
                 <Field label="Nome do evento" required>
                   <input
                     type="text"
@@ -516,7 +587,9 @@ export default function Dashboard() {
                     onChange={handlePartnerChange}
                     style={styles.input}
                   >
-                    <option value="">Nenhum parceiro vinculado</option>
+                    <option value="">
+                      {loadingPartners ? "Carregando parceiros..." : "Nenhum parceiro vinculado"}
+                    </option>
                     {partners.map((partner) => (
                       <option key={partner.id} value={partner.id}>
                         {partner.studio_name}
@@ -614,7 +687,14 @@ export default function Dashboard() {
                 </div>
 
                 <div style={styles.fullWidth}>
-                  <button type="submit" style={styles.primaryButton} disabled={saving}>
+                  <button
+                    type="submit"
+                    style={{
+                      ...styles.primaryButton,
+                      width: isSmallMobile ? "100%" : "auto",
+                    }}
+                    disabled={saving}
+                  >
                     <PlusCircle size={18} />
                     {saving ? "Salvando..." : "Criar evento"}
                   </button>
@@ -623,11 +703,23 @@ export default function Dashboard() {
             </section>
 
             <section style={styles.rightColumn}>
-              <div style={styles.card}>
+              <div
+                style={{
+                  ...styles.card,
+                  padding: isSmallMobile ? "16px" : "22px",
+                }}
+              >
                 <div style={styles.sectionHeaderSmall}>
                   <div>
                     <p style={styles.kicker}>Eventos</p>
-                    <h2 style={styles.sectionTitle}>Eventos criados</h2>
+                    <h2
+                      style={{
+                        ...styles.sectionTitle,
+                        fontSize: isSmallMobile ? "19px" : "22px",
+                      }}
+                    >
+                      Eventos criados
+                    </h2>
                   </div>
                 </div>
 
@@ -647,31 +739,47 @@ export default function Dashboard() {
                           ...(selectedEvent?.id === event.id
                             ? styles.eventItemActive
                             : {}),
+                          alignItems: isSmallMobile ? "flex-start" : "center",
+                          flexDirection: isSmallMobile ? "column" : "row",
                         }}
                       >
-                        <div>
+                        <div style={{ width: "100%" }}>
                           <strong style={styles.eventName}>{event.name}</strong>
                           <div style={styles.eventMeta}>
                             {event.partner_name || "Sem parceiro"} • {event.slug}
                           </div>
                         </div>
 
-                        {event.is_upload_open ? (
-                          <CheckCircle2 size={18} color="#2e8b57" />
-                        ) : (
-                          <Globe size={18} color="#999" />
-                        )}
+                        <div style={{ alignSelf: isSmallMobile ? "flex-end" : "center" }}>
+                          {event.is_upload_open ? (
+                            <CheckCircle2 size={18} color="#2e8b57" />
+                          ) : (
+                            <Globe size={18} color="#999" />
+                          )}
+                        </div>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div style={styles.card}>
+              <div
+                style={{
+                  ...styles.card,
+                  padding: isSmallMobile ? "16px" : "22px",
+                }}
+              >
                 <div style={styles.sectionHeaderSmall}>
                   <div>
                     <p style={styles.kicker}>Resumo</p>
-                    <h2 style={styles.sectionTitle}>Links do evento</h2>
+                    <h2
+                      style={{
+                        ...styles.sectionTitle,
+                        fontSize: isSmallMobile ? "19px" : "22px",
+                      }}
+                    >
+                      Links do evento
+                    </h2>
                   </div>
                 </div>
 
@@ -692,6 +800,7 @@ export default function Dashboard() {
                       url={selectedLinks.uploadUrl}
                       onCopy={() => copyText(selectedLinks.uploadUrl, "upload")}
                       copied={copiedKey === "upload"}
+                      isSmallMobile={isSmallMobile}
                     />
 
                     <LinkBox
@@ -702,6 +811,7 @@ export default function Dashboard() {
                         copyText(selectedLinks.privateGalleryUrl, "private")
                       }
                       copied={copiedKey === "private"}
+                      isSmallMobile={isSmallMobile}
                     />
 
                     <LinkBox
@@ -712,6 +822,7 @@ export default function Dashboard() {
                         copyText(selectedLinks.publicGalleryUrl, "public")
                       }
                       copied={copiedKey === "public"}
+                      isSmallMobile={isSmallMobile}
                     />
 
                     <div style={styles.qrCard}>
@@ -720,7 +831,12 @@ export default function Dashboard() {
                         <strong>QR Code do upload</strong>
                       </div>
 
-                      <div style={styles.qrPreview}>
+                      <div
+                        style={{
+                          ...styles.qrPreview,
+                          minHeight: isSmallMobile ? "180px" : "220px",
+                        }}
+                      >
                         {qrCodeDataUrl ? (
                           <img
                             src={qrCodeDataUrl}
@@ -732,11 +848,19 @@ export default function Dashboard() {
                         )}
                       </div>
 
-                      <div style={styles.qrActions}>
+                      <div
+                        style={{
+                          ...styles.qrActions,
+                          flexDirection: isSmallMobile ? "column" : "row",
+                        }}
+                      >
                         <button
                           type="button"
                           onClick={() => copyText(selectedLinks.uploadUrl, "qrlink")}
-                          style={styles.secondaryButton}
+                          style={{
+                            ...styles.secondaryButton,
+                            width: isSmallMobile ? "100%" : "auto",
+                          }}
                         >
                           <Copy size={16} />
                           {copiedKey === "qrlink" ? "Copiado!" : "Copiar link"}
@@ -745,19 +869,31 @@ export default function Dashboard() {
                         <button
                           type="button"
                           onClick={downloadQr}
-                          style={styles.secondaryButton}
+                          style={{
+                            ...styles.secondaryButton,
+                            width: isSmallMobile ? "100%" : "auto",
+                          }}
                         >
                           <Download size={16} />
                           Baixar QR
                         </button>
                       </div>
 
-                      <div style={styles.qrActions}>
+                      <div
+                        style={{
+                          ...styles.qrActions,
+                          flexDirection: isSmallMobile ? "column" : "row",
+                          marginBottom: 0,
+                        }}
+                      >
                         <a
                           href={selectedLinks.uploadUrl}
                           target="_blank"
                           rel="noreferrer"
-                          style={styles.linkButton}
+                          style={{
+                            ...styles.linkButton,
+                            width: isSmallMobile ? "100%" : "auto",
+                          }}
                         >
                           <ExternalLink size={16} />
                           Abrir upload
@@ -765,7 +901,10 @@ export default function Dashboard() {
 
                         <Link
                           to={`/evento/${selectedEvent.slug}/configuracoes`}
-                          style={styles.linkButton}
+                          style={{
+                            ...styles.linkButton,
+                            width: isSmallMobile ? "100%" : "auto",
+                          }}
                         >
                           Configurações
                         </Link>
@@ -804,7 +943,7 @@ function InfoBox({ label, value }) {
   );
 }
 
-function LinkBox({ icon, title, url, onCopy, copied }) {
+function LinkBox({ icon, title, url, onCopy, copied, isSmallMobile = false }) {
   return (
     <div style={styles.linkBox}>
       <div style={styles.linkBoxTitle}>
@@ -814,8 +953,20 @@ function LinkBox({ icon, title, url, onCopy, copied }) {
 
       <div style={styles.linkUrl}>{url}</div>
 
-      <div style={styles.linkActions}>
-        <button type="button" onClick={onCopy} style={styles.secondaryButton}>
+      <div
+        style={{
+          ...styles.linkActions,
+          flexDirection: isSmallMobile ? "column" : "row",
+        }}
+      >
+        <button
+          type="button"
+          onClick={onCopy}
+          style={{
+            ...styles.secondaryButton,
+            width: isSmallMobile ? "100%" : "auto",
+          }}
+        >
           <Copy size={16} />
           {copied ? "Copiado!" : "Copiar"}
         </button>
@@ -824,7 +975,10 @@ function LinkBox({ icon, title, url, onCopy, copied }) {
           href={url}
           target="_blank"
           rel="noreferrer"
-          style={styles.linkButton}
+          style={{
+            ...styles.linkButton,
+            width: isSmallMobile ? "100%" : "auto",
+          }}
         >
           <ExternalLink size={16} />
           Abrir
@@ -838,7 +992,6 @@ const styles = {
   page: {
     minHeight: "100vh",
     display: "grid",
-    gridTemplateColumns: "280px 1fr",
     background: "#f6f7fb",
   },
   centerScreen: {
@@ -848,6 +1001,44 @@ const styles = {
     background: "#f6f7fb",
     color: "#29314d",
   },
+  mobileTopbar: {
+    position: "sticky",
+    top: 0,
+    zIndex: 20,
+    background: "#ffffffee",
+    backdropFilter: "blur(10px)",
+    borderBottom: "1px solid #ececf3",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+    padding: "14px 16px",
+  },
+  mobileBrandWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  },
+  mobileBrandIcon: {
+    width: "40px",
+    height: "40px",
+    borderRadius: "12px",
+    background: "#1e2440",
+    color: "#fff",
+    display: "grid",
+    placeItems: "center",
+  },
+  mobileMenuButton: {
+    width: "42px",
+    height: "42px",
+    borderRadius: "12px",
+    border: "1px solid #dfe3ec",
+    background: "#fff",
+    color: "#1e2440",
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+  },
   sidebar: {
     background: "#1e2440",
     color: "#fff",
@@ -856,6 +1047,14 @@ const styles = {
     flexDirection: "column",
     justifyContent: "space-between",
     gap: "24px",
+    minHeight: "100vh",
+  },
+  sidebarMobile: {
+    minHeight: "auto",
+    borderBottomLeftRadius: "20px",
+    borderBottomRightRadius: "20px",
+    paddingTop: "12px",
+    paddingBottom: "18px",
   },
   brand: {
     display: "flex",
@@ -879,6 +1078,10 @@ const styles = {
     fontSize: "13px",
     opacity: 0.72,
   },
+  brandSubtitleDark: {
+    fontSize: "13px",
+    color: "#687086",
+  },
   menu: {
     display: "grid",
     gap: "10px",
@@ -895,6 +1098,7 @@ const styles = {
     fontWeight: 700,
     cursor: "pointer",
     textAlign: "left",
+    width: "100%",
   },
   menuButtonActive: {
     background: "rgba(255,255,255,0.12)",
@@ -931,27 +1135,29 @@ const styles = {
     gap: "8px",
     cursor: "pointer",
     fontWeight: 700,
+    width: "100%",
   },
   main: {
     padding: "24px",
+    minWidth: 0,
   },
   alert: {
     marginBottom: "18px",
     background: "#fff7e6",
-    color: "#ddce00",
+    color: "#8a6a00",
     border: "1px solid #f0d999",
     borderRadius: "14px",
     padding: "12px 14px",
   },
   contentGrid: {
     display: "grid",
-    gridTemplateColumns: "1.25fr 0.95fr",
     gap: "20px",
     alignItems: "start",
   },
   rightColumn: {
     display: "grid",
     gap: "20px",
+    minWidth: 0,
   },
   card: {
     background: "#fff",
@@ -959,6 +1165,7 @@ const styles = {
     borderRadius: "24px",
     padding: "22px",
     boxShadow: "0 12px 30px rgba(24, 32, 79, 0.06)",
+    minWidth: 0,
   },
   sectionHeader: {
     marginBottom: "18px",
@@ -968,7 +1175,7 @@ const styles = {
   },
   kicker: {
     margin: 0,
-    color: "#ddce00",
+    color: "#b08968",
     fontWeight: 700,
     fontSize: "13px",
   },
@@ -976,11 +1183,13 @@ const styles = {
     margin: "6px 0 8px",
     fontSize: "30px",
     color: "#1f2333",
+    lineHeight: 1.15,
   },
   sectionTitle: {
     margin: "6px 0 0",
     fontSize: "22px",
     color: "#1f2333",
+    lineHeight: 1.2,
   },
   subtitle: {
     margin: 0,
@@ -990,7 +1199,6 @@ const styles = {
   },
   formGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: "14px",
   },
   fullWidth: {
@@ -999,6 +1207,7 @@ const styles = {
   field: {
     display: "grid",
     gap: "6px",
+    minWidth: 0,
   },
   label: {
     color: "#42485c",
@@ -1009,12 +1218,15 @@ const styles = {
     color: "#d9534f",
   },
   input: {
+    width: "100%",
     height: "46px",
     borderRadius: "12px",
     border: "1px solid #dfe3ec",
     padding: "0 12px",
     outline: "none",
     fontSize: "14px",
+    minWidth: 0,
+    boxSizing: "border-box",
   },
   colorInput: {
     width: "100%",
@@ -1023,8 +1235,10 @@ const styles = {
     border: "1px solid #dfe3ec",
     padding: "4px",
     background: "#fff",
+    boxSizing: "border-box",
   },
   textarea: {
+    width: "100%",
     minHeight: "100px",
     borderRadius: "12px",
     border: "1px solid #dfe3ec",
@@ -1033,6 +1247,7 @@ const styles = {
     outline: "none",
     fontSize: "14px",
     fontFamily: "inherit",
+    boxSizing: "border-box",
   },
   checkboxRow: {
     display: "flex",
@@ -1041,6 +1256,7 @@ const styles = {
     fontSize: "14px",
     color: "#42485c",
     fontWeight: 600,
+    flexWrap: "wrap",
   },
   primaryButton: {
     height: "48px",
@@ -1069,6 +1285,7 @@ const styles = {
     cursor: "pointer",
     fontWeight: 700,
     padding: "0 14px",
+    boxSizing: "border-box",
   },
   linkButton: {
     height: "40px",
@@ -1083,6 +1300,7 @@ const styles = {
     textDecoration: "none",
     fontWeight: 700,
     padding: "0 14px",
+    boxSizing: "border-box",
   },
   eventList: {
     display: "grid",
@@ -1100,15 +1318,17 @@ const styles = {
     gap: "12px",
     cursor: "pointer",
     textAlign: "left",
+    boxSizing: "border-box",
   },
   eventItemActive: {
-    border: "1px solid #ddce00",
+    border: "1px solid #b08968",
     background: "#fff8f3",
   },
   eventName: {
     display: "block",
     color: "#1f2333",
     marginBottom: "4px",
+    wordBreak: "break-word",
   },
   eventMeta: {
     fontSize: "13px",
@@ -1148,10 +1368,11 @@ const styles = {
     gap: "8px",
     marginBottom: "10px",
     color: "#1f2333",
+    flexWrap: "wrap",
   },
   linkIcon: {
     display: "inline-flex",
-    color: "#ddce00",
+    color: "#b08968",
   },
   linkUrl: {
     background: "#fff",
@@ -1162,6 +1383,7 @@ const styles = {
     color: "#48506a",
     wordBreak: "break-word",
     marginBottom: "10px",
+    overflowWrap: "anywhere",
   },
   linkActions: {
     display: "flex",
@@ -1181,12 +1403,12 @@ const styles = {
     gap: "8px",
     marginBottom: "12px",
     color: "#1f2333",
+    flexWrap: "wrap",
   },
   qrPreview: {
     background: "#fff",
     border: "1px solid #e7eaf2",
     borderRadius: "16px",
-    minHeight: "220px",
     display: "grid",
     placeItems: "center",
     padding: "12px",

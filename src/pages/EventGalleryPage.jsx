@@ -78,7 +78,7 @@ function MediaCard({
         className="relative block w-full overflow-hidden bg-slate-100 text-left"
       >
         {isVideo ? (
-          <div className="relative aspect-[4/5] w-full bg-slate-900">
+          <div className="relative aspect-4/5 w-full bg-slate-900">
             {item.signedUrl ? (
               <video
                 src={item.signedUrl}
@@ -92,7 +92,7 @@ function MediaCard({
               </div>
             )}
 
-            <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-black/5 to-transparent" />
+            <div className="absolute inset-0 bg-linear-to-t from-black/35 via-black/5 to-transparent" />
             <div className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-800">
               Vídeo
             </div>
@@ -109,7 +109,7 @@ function MediaCard({
             </div>
           </div>
         ) : (
-          <div className="flex aspect-[4/5] items-center justify-center bg-slate-100">
+          <div className="flex aspect-4/5 items-center justify-center bg-slate-100">
             <ImageIcon className="h-10 w-10 text-slate-400" />
           </div>
         )}

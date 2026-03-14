@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-<<<<<<< HEAD
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-=======
-import { Link, Navigate, useParams } from "react-router-dom";
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 import {
   ArrowLeft,
   CalendarDays,
@@ -31,10 +27,7 @@ const defaultSettings = {
 
 export default function EventSettings() {
   const { slug } = useParams();
-<<<<<<< HEAD
   const navigate = useNavigate();
-=======
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 
   const [authLoading, setAuthLoading] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -71,10 +64,7 @@ export default function EventSettings() {
 
   useEffect(() => {
     loadPage();
-<<<<<<< HEAD
     // eslint-disable-next-line react-hooks/exhaustive-deps
-=======
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   }, [slug]);
 
   async function loadPage() {
@@ -126,19 +116,11 @@ export default function EventSettings() {
 
       setEventData(foundEvent);
 
-<<<<<<< HEAD
       const isAdminUser = profileData?.role === "admin";
       const isOwner = foundEvent.created_by === authUser.id;
       const isPartner = foundEvent.partner_id === authUser.id;
 
       if (!isAdminUser && !isOwner && !isPartner) {
-=======
-      const isAdmin = profileData?.role === "admin";
-      const isOwner = foundEvent.created_by === authUser.id;
-      const isPartner = foundEvent.partner_id === authUser.id;
-
-      if (!isAdmin && !isOwner && !isPartner) {
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
         setErrorMessage("Você não tem permissão para acessar este evento.");
         return;
       }
@@ -188,7 +170,6 @@ export default function EventSettings() {
 
         setSettingsId(createdSettings.id);
         setForm({
-<<<<<<< HEAD
           allow_videos:
             typeof createdSettings.allow_videos === "boolean"
               ? createdSettings.allow_videos
@@ -208,15 +189,6 @@ export default function EventSettings() {
               : defaultSettings.require_guest_name,
           gallery_mode:
             createdSettings.gallery_mode || defaultSettings.gallery_mode,
-=======
-          allow_videos: createdSettings.allow_videos,
-          max_photo_size_mb: createdSettings.max_photo_size_mb,
-          max_video_size_mb: createdSettings.max_video_size_mb,
-          max_video_duration_seconds:
-            createdSettings.max_video_duration_seconds,
-          require_guest_name: createdSettings.require_guest_name,
-          gallery_mode: createdSettings.gallery_mode,
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
         });
       }
     } catch (error) {
@@ -343,15 +315,11 @@ export default function EventSettings() {
   }
 
   const isAdmin = profile?.role === "admin";
-<<<<<<< HEAD
   const backLink = isAdmin ? "/painel" : "/meus-eventos";
 
   function handleBack() {
     navigate(backLink, { replace: true });
   }
-=======
-  const backLink = isAdmin ? "/dashboard" : "/meus-eventos";
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 
   const displayName =
     profile?.studio_name ||
@@ -388,15 +356,11 @@ export default function EventSettings() {
             </div>
           </div>
 
-<<<<<<< HEAD
           <button
             type="button"
             onClick={handleLogout}
             style={styles.logoutButton}
           >
-=======
-          <button type="button" onClick={handleLogout} style={styles.logoutButton}>
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
             <LogOut size={16} />
             Sair
           </button>
@@ -419,9 +383,6 @@ export default function EventSettings() {
         <section style={styles.heroCard}>
           <div>
             <p style={styles.kicker}>Evento selecionado</p>
-            <h1 style={styles.heroTitle}>
-              {eventData?.name || "Configurações do evento"}
-            </h1>
             <p style={styles.heroSubtitle}>
               Defina como sua galeria vai funcionar para convidados, uploads e
               vídeos.
@@ -429,22 +390,18 @@ export default function EventSettings() {
           </div>
 
           <div style={styles.heroActions}>
-<<<<<<< HEAD
-            <button
-              type="button"
-              onClick={handleBack}
-              style={styles.ghostButton}
-            >
-              <ArrowLeft size={16} />
-              Voltar
-            </button>
-=======
-            <Link to={backLink} style={styles.ghostLinkButton}>
-              <ArrowLeft size={16} />
-              Voltar
-            </Link>
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
-          </div>
+  <button
+    type="button"
+    onClick={() => {
+      
+      navigate(backLink, { replace: true });
+    }}
+    style={styles.ghostButton}
+  >
+    <ArrowLeft size={16} />
+    Voltar 
+  </button>
+</div>
         </section>
 
         {loading ? (
@@ -455,7 +412,6 @@ export default function EventSettings() {
           <section style={styles.panelCard}>
             <p style={styles.emptyText}>Evento não encontrado.</p>
             <div style={{ marginTop: 16 }}>
-<<<<<<< HEAD
               <button
                 type="button"
                 onClick={handleBack}
@@ -464,12 +420,6 @@ export default function EventSettings() {
                 <ArrowLeft size={16} />
                 Voltar
               </button>
-=======
-              <Link to={backLink} style={styles.secondaryLinkButton}>
-                <ArrowLeft size={16} />
-                Voltar
-              </Link>
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
             </div>
           </section>
         ) : (
@@ -694,21 +644,17 @@ export default function EventSettings() {
                 </div>
 
                 <div style={styles.actionsRow}>
-<<<<<<< HEAD
                   <button
-                    type="button"
-                    onClick={handleBack}
-                    style={styles.secondaryButton}
-                  >
-                    <ArrowLeft size={16} />
-                    Voltar ao painel
-                  </button>
-=======
-                  <Link to={backLink} style={styles.secondaryLinkButton}>
-                    <ArrowLeft size={16} />
-                    Voltar ao painel
-                  </Link>
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
+  type="button"
+  onClick={() => {
+    
+    navigate(backLink, { replace: true });
+  }}
+  style={styles.secondaryButton}
+>
+  <ArrowLeft size={16} />
+  Voltar ao painel
+</button>
 
                   <Link
                     to={`/evento/${eventData.slug}/galeria`}
@@ -959,11 +905,7 @@ const styles = {
     gap: "10px",
     flexWrap: "wrap",
   },
-<<<<<<< HEAD
   ghostButton: {
-=======
-  ghostLinkButton: {
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     height: "46px",
     border: "1px solid rgba(255,255,255,0.18)",
     borderRadius: "14px",
@@ -973,15 +915,9 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     gap: "8px",
-<<<<<<< HEAD
     fontWeight: 700,
     backdropFilter: "blur(8px)",
     cursor: "pointer",
-=======
-    textDecoration: "none",
-    fontWeight: 700,
-    backdropFilter: "blur(8px)",
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   contentGrid: {
     display: "grid",
@@ -1189,11 +1125,7 @@ const styles = {
     padding: "0 16px",
     boxShadow: "0 12px 24px rgba(30,36,64,0.16)",
   },
-<<<<<<< HEAD
   secondaryButton: {
-=======
-  secondaryLinkButton: {
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     height: "42px",
     border: "1px solid #e1ddd6",
     borderRadius: "14px",
@@ -1203,14 +1135,8 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     gap: "8px",
-<<<<<<< HEAD
     fontWeight: 700,
     padding: "0 14px",
     cursor: "pointer",
-=======
-    textDecoration: "none",
-    fontWeight: 700,
-    padding: "0 14px",
->>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
 };
