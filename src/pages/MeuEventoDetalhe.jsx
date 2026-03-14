@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
+<<<<<<< HEAD
 const MOBILE_BREAKPOINT = 768;
 const TABLET_BREAKPOINT = 1024;
 
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 export default function MeuEventoDetalhe() {
   const { slug } = useParams();
 
@@ -16,6 +19,7 @@ export default function MeuEventoDetalhe() {
   const [settings, setSettings] = useState(null);
   const [error, setError] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
+<<<<<<< HEAD
   const [screenWidth, setScreenWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1440
   );
@@ -28,6 +32,8 @@ export default function MeuEventoDetalhe() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -52,6 +58,7 @@ export default function MeuEventoDetalhe() {
         setAuthChecked(true);
 
         const { data: partnerData, error: partnerError } = await supabase
+<<<<<<< HEAD
           .from("partners")
           .select("*")
           .eq("profile_id", user.id)
@@ -65,6 +72,21 @@ export default function MeuEventoDetalhe() {
           setSettings(null);
           setLoading(false);
           return;
+=======
+             .from("partners")
+             .select("*")
+             .eq("profile_id", user.id)
+             .maybeSingle();
+
+            if (partnerError) throw partnerError;
+
+            if (!partnerData) {
+                setPartner(null);
+                setEvent(null);
+                setSettings(null);
+                setLoading(false);
+            return;
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
         }
 
         setPartner(partnerData);
@@ -107,6 +129,7 @@ export default function MeuEventoDetalhe() {
     loadEvent();
   }, [slug]);
 
+<<<<<<< HEAD
   const baseUrl =
     typeof window !== "undefined" ? window.location.origin : "";
 
@@ -117,6 +140,9 @@ export default function MeuEventoDetalhe() {
     () => getResponsiveStyles(screenWidth),
     [screenWidth]
   );
+=======
+  const baseUrl = window.location.origin;
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 
   const urls = useMemo(() => {
     if (!event?.slug) {
@@ -131,7 +157,15 @@ export default function MeuEventoDetalhe() {
 
     const uploadUrl = `${baseUrl}/evento/${event.slug}/upload`;
     const publicGalleryUrl = `${baseUrl}/galeria/${event.slug}`;
+<<<<<<< HEAD
     const privateGalleryUrl = `${baseUrl}/evento/${event.slug}/galeria`;
+=======
+
+    // ajuste esta rota se sua galeria privada usar outro caminho
+    const privateGalleryUrl = `${baseUrl}/evento/${event.slug}/galeria`;
+
+    // escolha qual link o QR deve abrir
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     const qrTargetUrl = uploadUrl;
 
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(
@@ -190,6 +224,7 @@ export default function MeuEventoDetalhe() {
 
   return (
     <div style={styles.page}>
+<<<<<<< HEAD
       <div
         style={{
           ...styles.container,
@@ -209,10 +244,16 @@ export default function MeuEventoDetalhe() {
               ...responsive.backLink,
             }}
           >
+=======
+      <div style={styles.container}>
+        <div style={styles.topBar}>
+          <Link to="/meus-eventos" style={styles.backLink}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
             ← Voltar para meus eventos
           </Link>
 
           {partner && (
+<<<<<<< HEAD
             <div
               style={{
                 ...styles.partnerChip,
@@ -221,6 +262,11 @@ export default function MeuEventoDetalhe() {
             >
               <span style={styles.partnerChipLabel}>Parceiro</span>
               <strong style={styles.partnerChipName}>{partner.name}</strong>
+=======
+            <div style={styles.partnerChip}>
+              <span style={styles.partnerChipLabel}>Parceiro</span>
+              <strong>{partner.name}</strong>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
             </div>
           )}
         </div>
@@ -254,7 +300,10 @@ export default function MeuEventoDetalhe() {
             <div
               style={{
                 ...styles.hero,
+<<<<<<< HEAD
                 ...responsive.hero,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                 backgroundImage: event.cover_url
                   ? `linear-gradient(rgba(35,40,58,.25), rgba(35,40,58,.35)), url(${event.cover_url})`
                   : "linear-gradient(135deg, #9e8f90 0%, #ead6d6 100%)",
@@ -262,6 +311,7 @@ export default function MeuEventoDetalhe() {
                 backgroundPosition: "center",
               }}
             >
+<<<<<<< HEAD
               <div
                 style={{
                   ...styles.heroTopRow,
@@ -292,10 +342,24 @@ export default function MeuEventoDetalhe() {
                   ...responsive.heroDescription,
                 }}
               >
+=======
+              <div style={styles.heroBadge}>
+                {event.is_upload_open ? "Evento ativo" : "Upload fechado"}
+              </div>
+
+              <div style={styles.heroTopRight}>
+                <span style={styles.heroMiniTag}>Acesso parceiro</span>
+              </div>
+
+              <h1 style={styles.heroTitle}>{event.name}</h1>
+
+              <p style={styles.heroDescription}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                 {event.description || "Sem descrição cadastrada para este evento."}
               </p>
             </div>
 
+<<<<<<< HEAD
             <div
               style={{
                 ...styles.bodyGrid,
@@ -311,6 +375,13 @@ export default function MeuEventoDetalhe() {
                     ...responsive.infoGrid,
                   }}
                 >
+=======
+            <div style={styles.bodyGrid}>
+              <div style={styles.leftColumn}>
+                <div style={styles.sectionTitle}>Resumo do evento</div>
+
+                <div style={styles.infoGrid}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                   <InfoBox label="Slug" value={event.slug} />
                   <InfoBox label="Acesso" value="parceiro" />
                   <InfoBox label="Data do evento" value={formatDate(event.event_date)} />
@@ -334,7 +405,10 @@ export default function MeuEventoDetalhe() {
                   copyLabel={copiedKey === "upload" ? "Copiado!" : "Copiar link"}
                   onCopy={() => copyText(urls.uploadUrl, "upload")}
                   openLabel="Abrir página"
+<<<<<<< HEAD
                   isMobile={isMobile}
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                 />
 
                 <LinkCard
@@ -345,7 +419,10 @@ export default function MeuEventoDetalhe() {
                   }
                   onCopy={() => copyText(urls.privateGalleryUrl, "private")}
                   openLabel="Ver galeria"
+<<<<<<< HEAD
                   isMobile={isMobile}
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                 />
 
                 <LinkCard
@@ -356,7 +433,10 @@ export default function MeuEventoDetalhe() {
                   }
                   onCopy={() => copyText(urls.publicGalleryUrl, "public")}
                   openLabel="Abrir pública"
+<<<<<<< HEAD
                   isMobile={isMobile}
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                 />
               </div>
 
@@ -364,12 +444,16 @@ export default function MeuEventoDetalhe() {
                 <div style={styles.qrCard}>
                   <div style={styles.qrTitle}>QR Code do evento</div>
 
+<<<<<<< HEAD
                   <div
                     style={{
                       ...styles.qrImageWrap,
                       ...responsive.qrImageWrap,
                     }}
                   >
+=======
+                  <div style={styles.qrImageWrap}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                     {urls.qrCodeUrl ? (
                       <img
                         src={urls.qrCodeUrl}
@@ -388,10 +472,14 @@ export default function MeuEventoDetalhe() {
 
                   <button
                     type="button"
+<<<<<<< HEAD
                     style={{
                       ...styles.darkButton,
                       ...responsive.fullWidthAction,
                     }}
+=======
+                    style={styles.darkButton}
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                     onClick={() => copyText(urls.qrTargetUrl, "qr")}
                     disabled={!urls.qrTargetUrl}
                   >
@@ -400,10 +488,14 @@ export default function MeuEventoDetalhe() {
 
                   <button
                     type="button"
+<<<<<<< HEAD
                     style={{
                       ...styles.lightButton,
                       ...responsive.fullWidthAction,
                     }}
+=======
+                    style={styles.lightButton}
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                     onClick={downloadQrCode}
                     disabled={!urls.qrCodeUrl}
                   >
@@ -428,7 +520,11 @@ function InfoBox({ label, value }) {
   );
 }
 
+<<<<<<< HEAD
 function LinkCard({ title, url, copyLabel, onCopy, openLabel, isMobile }) {
+=======
+function LinkCard({ title, url, copyLabel, onCopy, openLabel }) {
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   return (
     <div style={styles.linkCard}>
       <div style={styles.linkCardTitle}>{title}</div>
@@ -437,10 +533,14 @@ function LinkCard({ title, url, copyLabel, onCopy, openLabel, isMobile }) {
       <div style={styles.linkActions}>
         <button
           type="button"
+<<<<<<< HEAD
           style={{
             ...styles.darkButtonSmall,
             ...(isMobile ? styles.mobileActionButton : {}),
           }}
+=======
+          style={styles.darkButtonSmall}
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
           onClick={onCopy}
           disabled={!url}
         >
@@ -453,7 +553,10 @@ function LinkCard({ title, url, copyLabel, onCopy, openLabel, isMobile }) {
           rel="noreferrer"
           style={{
             ...styles.lightButtonSmall,
+<<<<<<< HEAD
             ...(isMobile ? styles.mobileActionButton : {}),
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
             pointerEvents: url ? "auto" : "none",
             opacity: url ? 1 : 0.55,
           }}
@@ -465,6 +568,7 @@ function LinkCard({ title, url, copyLabel, onCopy, openLabel, isMobile }) {
   );
 }
 
+<<<<<<< HEAD
 function getResponsiveStyles(screenWidth) {
   const isMobile = screenWidth <= MOBILE_BREAKPOINT;
   const isTablet = screenWidth > MOBILE_BREAKPOINT && screenWidth <= TABLET_BREAKPOINT;
@@ -556,6 +660,8 @@ function getResponsiveStyles(screenWidth) {
   };
 }
 
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 const styles = {
   page: {
     minHeight: "100vh",
@@ -580,7 +686,10 @@ const styles = {
     color: "#29314d",
     fontWeight: 700,
     fontSize: "14px",
+<<<<<<< HEAD
     wordBreak: "break-word",
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   partnerChip: {
     background: "#fff",
@@ -588,7 +697,10 @@ const styles = {
     borderRadius: "14px",
     padding: "10px 14px",
     boxShadow: "0 10px 25px rgba(24, 32, 79, 0.06)",
+<<<<<<< HEAD
     minWidth: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   partnerChipLabel: {
     display: "block",
@@ -596,9 +708,12 @@ const styles = {
     color: "#8a90a3",
     marginBottom: "4px",
   },
+<<<<<<< HEAD
   partnerChipName: {
     wordBreak: "break-word",
   },
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   stateBox: {
     background: "#fff",
     border: "1px solid #e9ebf3",
@@ -625,6 +740,7 @@ const styles = {
     padding: "28px 24px 24px",
     color: "#fff",
   },
+<<<<<<< HEAD
   heroTopRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -632,6 +748,8 @@ const styles = {
     gap: "12px",
     flexWrap: "wrap",
   },
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   heroBadge: {
     display: "inline-flex",
     alignItems: "center",
@@ -644,9 +762,15 @@ const styles = {
     fontWeight: 700,
   },
   heroTopRight: {
+<<<<<<< HEAD
     display: "flex",
     alignItems: "center",
     justifyContent: "flex-end",
+=======
+    position: "absolute",
+    right: "20px",
+    top: "20px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   heroMiniTag: {
     display: "inline-flex",
@@ -663,7 +787,10 @@ const styles = {
     fontSize: "36px",
     lineHeight: 1.1,
     color: "#fff",
+<<<<<<< HEAD
     wordBreak: "break-word",
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   heroDescription: {
     margin: 0,
@@ -671,7 +798,10 @@ const styles = {
     fontSize: "15px",
     lineHeight: 1.5,
     color: "rgba(255,255,255,0.96)",
+<<<<<<< HEAD
     wordBreak: "break-word",
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   bodyGrid: {
     display: "grid",
@@ -702,7 +832,10 @@ const styles = {
     border: "1px solid #e6e9f3",
     borderRadius: "14px",
     padding: "14px",
+<<<<<<< HEAD
     minWidth: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   infoLabel: {
     display: "block",
@@ -723,7 +856,10 @@ const styles = {
     borderRadius: "18px",
     padding: "16px",
     marginBottom: "14px",
+<<<<<<< HEAD
     minWidth: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   linkCardTitle: {
     fontSize: "14px",
@@ -789,7 +925,10 @@ const styles = {
   qrPlaceholder: {
     color: "#8d92a3",
     fontSize: "14px",
+<<<<<<< HEAD
     textAlign: "center",
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   qrText: {
     margin: "0 0 16px",
@@ -808,7 +947,10 @@ const styles = {
     fontWeight: 700,
     cursor: "pointer",
     marginBottom: "10px",
+<<<<<<< HEAD
     padding: "10px 14px",
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   lightButton: {
     width: "100%",
@@ -819,11 +961,18 @@ const styles = {
     color: "#6b7390",
     fontWeight: 700,
     cursor: "pointer",
+<<<<<<< HEAD
     padding: "10px 14px",
   },
   darkButtonSmall: {
     minHeight: "40px",
     padding: "10px 14px",
+=======
+  },
+  darkButtonSmall: {
+    minHeight: "40px",
+    padding: "0 14px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     border: "none",
     borderRadius: "12px",
     background: "#1e2440",
@@ -836,7 +985,11 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: "40px",
+<<<<<<< HEAD
     padding: "10px 14px",
+=======
+    padding: "0 14px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     border: "1px solid #dbe0ea",
     borderRadius: "12px",
     background: "#fff",
@@ -844,7 +997,10 @@ const styles = {
     fontWeight: 700,
     textDecoration: "none",
   },
+<<<<<<< HEAD
   mobileActionButton: {
     width: "100%",
   },
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 };

@@ -14,12 +14,19 @@ import {
   QrCode,
   Settings,
   UserCircle2,
+<<<<<<< HEAD
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 const MOBILE_BREAKPOINT = 768;
 const TABLET_BREAKPOINT = 1024;
 
+=======
+  Video,
+} from "lucide-react";
+import { supabase } from "../lib/supabase";
+
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 export default function MeusEventos() {
   const [authLoading, setAuthLoading] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
@@ -33,19 +40,25 @@ export default function MeusEventos() {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
   const [message, setMessage] = useState("");
+<<<<<<< HEAD
   const [screenWidth, setScreenWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1440
   );
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 
   const baseUrl =
     typeof window !== "undefined" ? window.location.origin : "";
 
+<<<<<<< HEAD
   const isMobile = screenWidth <= MOBILE_BREAKPOINT;
   const isTablet = screenWidth > MOBILE_BREAKPOINT && screenWidth <= TABLET_BREAKPOINT;
   const isDesktop = screenWidth > TABLET_BREAKPOINT;
 
   const responsive = useMemo(() => getResponsiveStyles(screenWidth), [screenWidth]);
 
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   const selectedLinks = useMemo(() => {
     if (!selectedEvent?.slug) {
       return {
@@ -79,6 +92,7 @@ export default function MeusEventos() {
   }, []);
 
   useEffect(() => {
+<<<<<<< HEAD
     function handleResize() {
       setScreenWidth(window.innerWidth);
     }
@@ -88,6 +102,8 @@ export default function MeusEventos() {
   }, []);
 
   useEffect(() => {
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     if (selectedEvent?.slug) {
       generateQrCode(`${baseUrl}/evento/${selectedEvent.slug}/upload`);
     } else {
@@ -125,7 +141,11 @@ export default function MeusEventos() {
 
       setProfile(profileData || null);
 
+<<<<<<< HEAD
       await loadEvents();
+=======
+      await loadEvents(user.id);
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     } catch (error) {
       console.error("Erro ao carregar sessão:", error);
       setMessage("Erro ao carregar sessão do usuário.");
@@ -135,6 +155,7 @@ export default function MeusEventos() {
   }
 
   async function loadEvents() {
+<<<<<<< HEAD
     try {
       setLoadingEvents(true);
 
@@ -193,6 +214,45 @@ export default function MeusEventos() {
     }
   }
 
+=======
+  try {
+    const { data: userData } = await supabase.auth.getUser()
+    const user = userData.user
+
+    if (!user) return
+
+    // 1 descobrir o partner
+    const { data: partner, error: partnerError } = await supabase
+      .from("partners")
+      .select("id")
+      .eq("profile_id", user.id)
+      .single()
+
+    if (partnerError || !partner) {
+      console.error("Parceiro não encontrado")
+      setEvents([])
+      return
+    }
+
+    // 2 buscar eventos desse parceiro
+    const { data: events, error } = await supabase
+      .from("events")
+      .select(`
+        *,
+        event_settings (*)
+      `)
+      .eq("partner_id", partner.id)
+      .order("created_at", { ascending: false })
+
+    if (error) throw error
+
+    setEvents(events || [])
+
+  } catch (error) {
+    console.error("Erro ao carregar eventos:", error)
+  }
+}
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   async function generateQrCode(text) {
     try {
       const url = await QRCode.toDataURL(text, {
@@ -264,7 +324,11 @@ export default function MeusEventos() {
   }
 
   if (profile?.role === "admin") {
+<<<<<<< HEAD
     return <Navigate to="/painel" replace />;
+=======
+    return <Navigate to="/dashboard" replace />;
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   }
 
   const partnerName =
@@ -279,6 +343,7 @@ export default function MeusEventos() {
       <div style={styles.backgroundGlowTop} />
       <div style={styles.backgroundGlowBottom} />
 
+<<<<<<< HEAD
       <header
         style={{
           ...styles.header,
@@ -291,6 +356,10 @@ export default function MeusEventos() {
             ...responsive.headerLeft,
           }}
         >
+=======
+      <header style={styles.header}>
+        <div style={styles.headerLeft}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
           <div style={styles.brandIcon}>
             <Camera size={22} />
           </div>
@@ -301,6 +370,7 @@ export default function MeusEventos() {
           </div>
         </div>
 
+<<<<<<< HEAD
         <div
           style={{
             ...styles.headerRight,
@@ -313,6 +383,10 @@ export default function MeusEventos() {
               ...responsive.partnerBadge,
             }}
           >
+=======
+        <div style={styles.headerRight}>
+          <div style={styles.partnerBadge}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
             <UserCircle2 size={18} />
             <div style={styles.partnerBadgeText}>
               <strong style={styles.partnerName}>{partnerName}</strong>
@@ -320,6 +394,7 @@ export default function MeusEventos() {
             </div>
           </div>
 
+<<<<<<< HEAD
           <button
             type="button"
             onClick={handleLogout}
@@ -328,12 +403,16 @@ export default function MeusEventos() {
               ...responsive.fullWidthButtonMaybe,
             }}
           >
+=======
+          <button type="button" onClick={handleLogout} style={styles.logoutButton}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
             <LogOut size={16} />
             Sair
           </button>
         </div>
       </header>
 
+<<<<<<< HEAD
       <main
         style={{
           ...styles.main,
@@ -364,6 +443,16 @@ export default function MeusEventos() {
                 ...responsive.heroSubtitle,
               }}
             >
+=======
+      <main style={styles.main}>
+        {message ? <div style={styles.alert}>{message}</div> : null}
+
+        <section style={styles.heroCard}>
+          <div>
+            <p style={styles.kicker}>Área do Parceiro</p>
+            <h1 style={styles.heroTitle}>Seus eventos em um só lugar</h1>
+            <p style={styles.heroSubtitle}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
               Acesse links, QR Code, galerias e configurações dos eventos
               vinculados à sua conta.
             </p>
@@ -372,10 +461,14 @@ export default function MeusEventos() {
           <div style={styles.heroActions}>
             <button
               type="button"
+<<<<<<< HEAD
               style={{
                 ...styles.refreshButton,
                 ...responsive.fullWidthButtonMaybe,
               }}
+=======
+              style={styles.refreshButton}
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
               onClick={() => loadEvents()}
             >
               Atualizar eventos
@@ -383,17 +476,22 @@ export default function MeusEventos() {
           </div>
         </section>
 
+<<<<<<< HEAD
         <section
           style={{
             ...styles.statsGrid,
             ...responsive.statsGrid,
           }}
         >
+=======
+        <section style={styles.statsGrid}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
           <div style={styles.statCard}>
             <div style={styles.statIconWrap}>
               <CalendarDays size={18} />
             </div>
             <div>
+<<<<<<< HEAD
               <div
                 style={{
                   ...styles.statValue,
@@ -402,6 +500,9 @@ export default function MeusEventos() {
               >
                 {stats.total}
               </div>
+=======
+              <div style={styles.statValue}>{stats.total}</div>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
               <div style={styles.statLabel}>Eventos vinculados</div>
             </div>
           </div>
@@ -411,6 +512,7 @@ export default function MeusEventos() {
               <ImageIcon size={18} />
             </div>
             <div>
+<<<<<<< HEAD
               <div
                 style={{
                   ...styles.statValue,
@@ -419,6 +521,9 @@ export default function MeusEventos() {
               >
                 {stats.uploadsOpen}
               </div>
+=======
+              <div style={styles.statValue}>{stats.uploadsOpen}</div>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
               <div style={styles.statLabel}>Uploads abertos</div>
             </div>
           </div>
@@ -428,6 +533,7 @@ export default function MeusEventos() {
               <Globe size={18} />
             </div>
             <div>
+<<<<<<< HEAD
               <div
                 style={{
                   ...styles.statValue,
@@ -436,22 +542,30 @@ export default function MeusEventos() {
               >
                 {stats.withDate}
               </div>
+=======
+              <div style={styles.statValue}>{stats.withDate}</div>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
               <div style={styles.statLabel}>Com data definida</div>
             </div>
           </div>
         </section>
 
+<<<<<<< HEAD
         <section
           style={{
             ...styles.contentGrid,
             ...responsive.contentGrid,
           }}
         >
+=======
+        <section style={styles.contentGrid}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
           <div style={styles.leftColumn}>
             <div style={styles.panelCard}>
               <div style={styles.panelHeader}>
                 <div>
                   <p style={styles.kicker}>Eventos</p>
+<<<<<<< HEAD
                   <h2
                     style={{
                       ...styles.panelTitle,
@@ -460,10 +574,14 @@ export default function MeusEventos() {
                   >
                     Minha lista de eventos
                   </h2>
+=======
+                  <h2 style={styles.panelTitle}>Minha lista de eventos</h2>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                 </div>
               </div>
 
               {loadingEvents && events.length === 0 ? (
+<<<<<<< HEAD
                 <p style={styles.emptyText}>Carregando seus eventos...</p>
               ) : events.length === 0 ? (
                 <p style={styles.emptyText}>
@@ -526,6 +644,63 @@ export default function MeusEventos() {
                   })}
                 </div>
               )}
+=======
+  <p style={styles.emptyText}>Carregando seus eventos...</p>
+) : events.length === 0 ? (
+  <p style={styles.emptyText}>
+    Nenhum evento vinculado à sua conta no momento.
+  </p>
+) : (
+  <div style={styles.eventList}>
+    {events.map((event) => {
+      const isActive = selectedEvent?.id === event.id
+
+      return (
+        <button
+          key={event.id}
+          type="button"
+          onClick={() => setSelectedEvent(event)}
+          style={{
+            ...styles.eventItem,
+            ...(isActive ? styles.eventItemActive : {}),
+          }}
+        >
+          <div style={styles.eventItemContent}>
+            <div style={styles.eventTopRow}>
+              <strong style={styles.eventName}>
+                {event.name || "Evento sem nome"}
+              </strong>
+
+              <span
+                style={{
+                  ...styles.statusBadge,
+                  ...(event.is_upload_open
+                    ? styles.statusOpen
+                    : styles.statusClosed),
+                }}
+              >
+                {event.is_upload_open ? "Upload aberto" : "Upload fechado"}
+              </span>
+            </div>
+
+            <div style={styles.eventMeta}>
+              <span>{event.slug || "sem-slug"}</span>
+              <span>•</span>
+              <span>{formatDate(event.event_date)}</span>
+            </div>
+
+            <div style={styles.eventDescription}>
+              {event.description?.trim()
+                ? event.description
+                : "Sem descrição cadastrada para este evento."}
+            </div>
+          </div>
+        </button>
+      )
+    })}
+  </div>
+)}
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
             </div>
           </div>
 
@@ -534,6 +709,7 @@ export default function MeusEventos() {
               <div style={styles.panelHeader}>
                 <div>
                   <p style={styles.kicker}>Resumo</p>
+<<<<<<< HEAD
                   <h2
                     style={{
                       ...styles.panelTitle,
@@ -542,6 +718,9 @@ export default function MeusEventos() {
                   >
                     Evento selecionado
                   </h2>
+=======
+                  <h2 style={styles.panelTitle}>Evento selecionado</h2>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                 </div>
               </div>
 
@@ -568,9 +747,13 @@ export default function MeusEventos() {
                   <InfoBox
                     label="Vídeos"
                     value={
+<<<<<<< HEAD
                       selectedEvent.event_settings?.allow_videos
                         ? "Permitidos"
                         : "Bloqueados"
+=======
+                      selectedEvent.event_settings?.allow_videos ? "Permitidos" : "Bloqueados"
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                     }
                   />
                   <InfoBox
@@ -589,6 +772,7 @@ export default function MeusEventos() {
               <div style={styles.panelHeader}>
                 <div>
                   <p style={styles.kicker}>Acessos rápidos</p>
+<<<<<<< HEAD
                   <h2
                     style={{
                       ...styles.panelTitle,
@@ -597,13 +781,20 @@ export default function MeusEventos() {
                   >
                     Links do evento
                   </h2>
+=======
+                  <h2 style={styles.panelTitle}>Links do evento</h2>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                 </div>
               </div>
 
               {!selectedEvent ? (
+<<<<<<< HEAD
                 <p style={styles.emptyText}>
                   Selecione um evento para exibir os links.
                 </p>
+=======
+                <p style={styles.emptyText}>Selecione um evento para exibir os links.</p>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
               ) : (
                 <>
                   <LinkBox
@@ -612,7 +803,10 @@ export default function MeusEventos() {
                     url={selectedLinks.uploadUrl}
                     onCopy={() => copyText(selectedLinks.uploadUrl, "upload")}
                     copied={copiedKey === "upload"}
+<<<<<<< HEAD
                     isMobile={isMobile}
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                   />
 
                   <LinkBox
@@ -621,7 +815,10 @@ export default function MeusEventos() {
                     url={selectedLinks.privateGalleryUrl}
                     onCopy={() => copyText(selectedLinks.privateGalleryUrl, "private")}
                     copied={copiedKey === "private"}
+<<<<<<< HEAD
                     isMobile={isMobile}
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                   />
 
                   <LinkBox
@@ -630,7 +827,10 @@ export default function MeusEventos() {
                     url={selectedLinks.publicGalleryUrl}
                     onCopy={() => copyText(selectedLinks.publicGalleryUrl, "public")}
                     copied={copiedKey === "public"}
+<<<<<<< HEAD
                     isMobile={isMobile}
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                   />
                 </>
               )}
@@ -640,6 +840,7 @@ export default function MeusEventos() {
               <div style={styles.panelHeader}>
                 <div>
                   <p style={styles.kicker}>QR Code</p>
+<<<<<<< HEAD
                   <h2
                     style={{
                       ...styles.panelTitle,
@@ -648,10 +849,14 @@ export default function MeusEventos() {
                   >
                     Compartilhamento rápido
                   </h2>
+=======
+                  <h2 style={styles.panelTitle}>Compartilhamento rápido</h2>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                 </div>
               </div>
 
               {!selectedEvent ? (
+<<<<<<< HEAD
                 <p style={styles.emptyText}>
                   Selecione um evento para gerar o QR Code.
                 </p>
@@ -663,6 +868,12 @@ export default function MeusEventos() {
                       ...responsive.qrPreview,
                     }}
                   >
+=======
+                <p style={styles.emptyText}>Selecione um evento para gerar o QR Code.</p>
+              ) : (
+                <>
+                  <div style={styles.qrPreview}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                     {qrCodeDataUrl ? (
                       <img
                         src={qrCodeDataUrl}
@@ -681,15 +892,20 @@ export default function MeusEventos() {
                     <button
                       type="button"
                       onClick={() => copyText(selectedLinks.uploadUrl, "qrcode-link")}
+<<<<<<< HEAD
                       style={{
                         ...styles.secondaryButton,
                         ...responsive.actionButton,
                       }}
+=======
+                      style={styles.secondaryButton}
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                     >
                       <Copy size={16} />
                       {copiedKey === "qrcode-link" ? "Copiado!" : "Copiar link"}
                     </button>
 
+<<<<<<< HEAD
                     <button
                       type="button"
                       onClick={downloadQr}
@@ -698,6 +914,9 @@ export default function MeusEventos() {
                         ...responsive.actionButton,
                       }}
                     >
+=======
+                    <button type="button" onClick={downloadQr} style={styles.secondaryButton}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                       <Download size={16} />
                       Baixar QR
                     </button>
@@ -708,10 +927,14 @@ export default function MeusEventos() {
                       href={selectedLinks.uploadUrl}
                       target="_blank"
                       rel="noreferrer"
+<<<<<<< HEAD
                       style={{
                         ...styles.primaryLinkButton,
                         ...responsive.actionButton,
                       }}
+=======
+                      style={styles.primaryLinkButton}
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                     >
                       <ExternalLink size={16} />
                       Abrir upload
@@ -719,10 +942,14 @@ export default function MeusEventos() {
 
                     <Link
                       to={`/evento/${selectedEvent.slug}/configuracoes`}
+<<<<<<< HEAD
                       style={{
                         ...styles.secondaryLinkButton,
                         ...responsive.actionButton,
                       }}
+=======
+                      style={styles.secondaryLinkButton}
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
                     >
                       <Settings size={16} />
                       Configurações
@@ -747,7 +974,11 @@ function InfoBox({ label, value }) {
   );
 }
 
+<<<<<<< HEAD
 function LinkBox({ icon, title, url, onCopy, copied, isMobile }) {
+=======
+function LinkBox({ icon, title, url, onCopy, copied }) {
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   return (
     <div style={styles.linkBox}>
       <div style={styles.linkBoxTitle}>
@@ -758,6 +989,7 @@ function LinkBox({ icon, title, url, onCopy, copied, isMobile }) {
       <div style={styles.linkUrl}>{url || "—"}</div>
 
       <div style={styles.linkActions}>
+<<<<<<< HEAD
         <button
           type="button"
           onClick={onCopy}
@@ -766,10 +998,14 @@ function LinkBox({ icon, title, url, onCopy, copied, isMobile }) {
             ...(isMobile ? styles.mobileActionButton : {}),
           }}
         >
+=======
+        <button type="button" onClick={onCopy} style={styles.secondaryButton}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
           <Copy size={16} />
           {copied ? "Copiado!" : "Copiar"}
         </button>
 
+<<<<<<< HEAD
         <a
           href={url}
           target="_blank"
@@ -779,6 +1015,9 @@ function LinkBox({ icon, title, url, onCopy, copied, isMobile }) {
             ...(isMobile ? styles.mobileActionButton : {}),
           }}
         >
+=======
+        <a href={url} target="_blank" rel="noreferrer" style={styles.secondaryLinkButton}>
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
           <ExternalLink size={16} />
           Abrir
         </a>
@@ -787,6 +1026,7 @@ function LinkBox({ icon, title, url, onCopy, copied, isMobile }) {
   );
 }
 
+<<<<<<< HEAD
 function getResponsiveStyles(screenWidth) {
   const isMobile = screenWidth <= MOBILE_BREAKPOINT;
   const isTablet = screenWidth > MOBILE_BREAKPOINT && screenWidth <= TABLET_BREAKPOINT;
@@ -901,6 +1141,8 @@ function getResponsiveStyles(screenWidth) {
   };
 }
 
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
 const styles = {
   page: {
     minHeight: "100vh",
@@ -935,7 +1177,12 @@ const styles = {
     minHeight: "100vh",
     display: "grid",
     placeItems: "center",
+<<<<<<< HEAD
     background: "linear-gradient(180deg, #f7f5f2 0%, #f4f0ea 100%)",
+=======
+    background:
+      "linear-gradient(180deg, #f7f5f2 0%, #f4f0ea 100%)",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     padding: "24px",
   },
   loadingCard: {
@@ -982,13 +1229,19 @@ const styles = {
     backdropFilter: "blur(18px)",
     background: "rgba(247,245,242,0.72)",
     borderBottom: "1px solid rgba(30,36,64,0.08)",
+<<<<<<< HEAD
     flexWrap: "wrap",
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   headerLeft: {
     display: "flex",
     alignItems: "center",
     gap: "14px",
+<<<<<<< HEAD
     minWidth: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   brandIcon: {
     width: "52px",
@@ -999,7 +1252,10 @@ const styles = {
     display: "grid",
     placeItems: "center",
     boxShadow: "0 12px 28px rgba(30,36,64,0.22)",
+<<<<<<< HEAD
     flexShrink: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   brandTitle: {
     fontSize: "17px",
@@ -1027,12 +1283,18 @@ const styles = {
     borderRadius: "16px",
     padding: "10px 14px",
     color: "#1f2333",
+<<<<<<< HEAD
     minWidth: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   partnerBadgeText: {
     display: "grid",
     gap: "2px",
+<<<<<<< HEAD
     minWidth: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   partnerName: {
     fontSize: "14px",
@@ -1043,7 +1305,11 @@ const styles = {
     wordBreak: "break-word",
   },
   logoutButton: {
+<<<<<<< HEAD
     minHeight: "44px",
+=======
+    height: "44px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     borderRadius: "14px",
     border: "1px solid rgba(30,36,64,0.08)",
     background: "#fff",
@@ -1054,7 +1320,11 @@ const styles = {
     gap: "8px",
     cursor: "pointer",
     fontWeight: 700,
+<<<<<<< HEAD
     padding: "10px 16px",
+=======
+    padding: "0 16px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     boxShadow: "0 8px 22px rgba(24,32,79,0.06)",
   },
   main: {
@@ -1109,17 +1379,27 @@ const styles = {
     display: "flex",
     gap: "10px",
     flexWrap: "wrap",
+<<<<<<< HEAD
     width: "100%",
     maxWidth: "260px",
   },
   refreshButton: {
     minHeight: "46px",
     width: "100%",
+=======
+  },
+  refreshButton: {
+    height: "46px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     border: "1px solid rgba(255,255,255,0.18)",
     borderRadius: "14px",
     background: "rgba(255,255,255,0.12)",
     color: "#fff",
+<<<<<<< HEAD
     padding: "12px 18px",
+=======
+    padding: "0 18px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     cursor: "pointer",
     fontWeight: 700,
     backdropFilter: "blur(8px)",
@@ -1139,7 +1419,10 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "14px",
+<<<<<<< HEAD
     minWidth: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   statIconWrap: {
     width: "46px",
@@ -1149,7 +1432,10 @@ const styles = {
     color: "#5e4632",
     display: "grid",
     placeItems: "center",
+<<<<<<< HEAD
     flexShrink: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   statValue: {
     fontSize: "28px",
@@ -1171,12 +1457,18 @@ const styles = {
   leftColumn: {
     display: "grid",
     gap: "20px",
+<<<<<<< HEAD
     minWidth: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   rightColumn: {
     display: "grid",
     gap: "20px",
+<<<<<<< HEAD
     minWidth: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   panelCard: {
     background: "rgba(255,255,255,0.78)",
@@ -1185,7 +1477,10 @@ const styles = {
     borderRadius: "28px",
     padding: "22px",
     boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
+<<<<<<< HEAD
     minWidth: 0,
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   panelHeader: {
     marginBottom: "16px",
@@ -1236,9 +1531,15 @@ const styles = {
     fontSize: "16px",
   },
   statusBadge: {
+<<<<<<< HEAD
     minHeight: "28px",
     borderRadius: "999px",
     padding: "4px 12px",
+=======
+    height: "28px",
+    borderRadius: "999px",
+    padding: "0 12px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1298,7 +1599,10 @@ const styles = {
     gap: "8px",
     marginBottom: "10px",
     color: "#1f2333",
+<<<<<<< HEAD
     flexWrap: "wrap",
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   linkIcon: {
     display: "inline-flex",
@@ -1320,7 +1624,11 @@ const styles = {
     flexWrap: "wrap",
   },
   secondaryButton: {
+<<<<<<< HEAD
     minHeight: "42px",
+=======
+    height: "42px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     border: "1px solid #e1ddd6",
     borderRadius: "14px",
     background: "#fff",
@@ -1331,11 +1639,19 @@ const styles = {
     gap: "8px",
     cursor: "pointer",
     fontWeight: 700,
+<<<<<<< HEAD
     padding: "10px 14px",
     textDecoration: "none",
   },
   primaryLinkButton: {
     minHeight: "44px",
+=======
+    padding: "0 14px",
+    textDecoration: "none",
+  },
+  primaryLinkButton: {
+    height: "44px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     border: "none",
     borderRadius: "14px",
     background: "linear-gradient(135deg, #1e2440 0%, #33406b 100%)",
@@ -1346,11 +1662,19 @@ const styles = {
     gap: "8px",
     textDecoration: "none",
     fontWeight: 800,
+<<<<<<< HEAD
     padding: "10px 16px",
     boxShadow: "0 12px 24px rgba(30,36,64,0.16)",
   },
   secondaryLinkButton: {
     minHeight: "42px",
+=======
+    padding: "0 16px",
+    boxShadow: "0 12px 24px rgba(30,36,64,0.16)",
+  },
+  secondaryLinkButton: {
+    height: "42px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
     border: "1px solid #e1ddd6",
     borderRadius: "14px",
     background: "#fff",
@@ -1361,10 +1685,14 @@ const styles = {
     gap: "8px",
     textDecoration: "none",
     fontWeight: 700,
+<<<<<<< HEAD
     padding: "10px 14px",
   },
   mobileActionButton: {
     width: "100%",
+=======
+    padding: "0 14px",
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   qrPreview: {
     background: "#fff",
@@ -1388,7 +1716,10 @@ const styles = {
     placeItems: "center",
     color: "#7a8091",
     fontSize: "14px",
+<<<<<<< HEAD
     textAlign: "center",
+=======
+>>>>>>> 1fdfefb1840d0121480be2b3d1e43ee401c6062e
   },
   qrActions: {
     display: "flex",
