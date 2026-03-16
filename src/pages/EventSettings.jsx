@@ -13,6 +13,8 @@ import {
   Video,
   UserCircle2,
   LogOut,
+  Upload,
+  ImagePlus,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -25,6 +27,19 @@ const defaultSettings = {
   gallery_mode: "private",
 };
 
+const defaultEventForm = {
+  name: "",
+  description: "",
+  cover_url: "",
+  logo_url: "",
+  primary_color: "#1e2440",
+  secondary_color: "#f6f7fb",
+  accent_color: "#b08968",
+  instructions: "",
+  is_upload_open: true,
+  event_date: "",
+};
+
 export default function EventSettings() {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -33,6 +48,9 @@ export default function EventSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
 
@@ -40,6 +58,8 @@ export default function EventSettings() {
   const [settingsId, setSettingsId] = useState(null);
 
   const [form, setForm] = useState(defaultSettings);
+  const [eventForm, setEventForm] = useState(defaultEventForm);
+
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -115,6 +135,22 @@ export default function EventSettings() {
       }
 
       setEventData(foundEvent);
+
+      setEventForm({
+        name: foundEvent.name || "",
+        description: foundEvent.description || "",
+        cover_url: foundEvent.cover_url || "",
+        logo_url: foundEvent.logo_url || "",
+        primary_color: foundEvent.primary_color || "#1e2440",
+        secondary_color: foundEvent.secondary_color || "#f6f7fb",
+        accent_color: foundEvent.accent_color || "#b08968",
+        instructions: foundEvent.instructions || "",
+        is_upload_open:
+          typeof foundEvent.is_upload_open === "boolean"
+            ? foundEvent.is_upload_open
+            : true,
+        event_date: foundEvent.event_date || "",
+      });
 
       const isAdminUser = profileData?.role === "admin";
       const isOwner = foundEvent.created_by === authUser.id;
@@ -218,11 +254,83 @@ export default function EventSettings() {
     }));
   }
 
+  function handleEventChange(event) {
+    const { name, value, type, checked } = event.target;
+
+    setEventForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  }
+
+  async function handleImageUpload(file, type) {
+    if (!file || !eventData?.id) return;
+
+    const isCover = type === "cover";
+    const setUploading = isCover ? setUploadingCover : setUploadingLogo;
+
+    try {
+      setUploading(true);
+      setMessage("");
+      setErrorMessage("");
+
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Selecione um arquivo de imagem válido.");
+      }
+
+      const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const safeExt = fileExt === "jpeg" ? "jpg" : fileExt;
+      const fileName = `${type}-${Date.now()}.${safeExt}`;
+      const filePath = `${eventData.id}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("event-images")
+        .upload(filePath, file, {
+          upsert: true,
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from("event-images")
+        .getPublicUrl(filePath);
+
+      const publicUrl = publicUrlData?.publicUrl || "";
+
+      if (!publicUrl) {
+        throw new Error("Não foi possível obter a URL do arquivo enviado.");
+      }
+
+      setEventForm((prev) => ({
+        ...prev,
+        [isCover ? "cover_url" : "logo_url"]: publicUrl,
+      }));
+
+      setMessage(
+        isCover ? "Capa enviada com sucesso." : "Logo enviada com sucesso."
+      );
+    } catch (error) {
+      console.error(`Erro ao enviar ${type}:`, error);
+      setErrorMessage(
+        error?.message ||
+          `Não foi possível enviar ${isCover ? "a capa" : "a logo"}.`
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handleSave(e) {
     e.preventDefault();
 
     if (!eventData?.id) {
       setErrorMessage("Evento inválido.");
+      return;
+    }
+
+    if (!eventForm.name.trim()) {
+      setErrorMessage("O nome do evento é obrigatório.");
       return;
     }
 
@@ -248,7 +356,29 @@ export default function EventSettings() {
       setMessage("");
       setErrorMessage("");
 
-      const payload = {
+      const eventPayload = {
+        name: eventForm.name.trim(),
+        description: eventForm.description.trim() || null,
+        cover_url: eventForm.cover_url.trim() || null,
+        logo_url: eventForm.logo_url.trim() || null,
+        primary_color: eventForm.primary_color,
+        secondary_color: eventForm.secondary_color,
+        accent_color: eventForm.accent_color,
+        instructions: eventForm.instructions.trim() || null,
+        is_upload_open: eventForm.is_upload_open,
+        event_date: eventForm.event_date || null,
+      };
+
+      const { data: updatedEvent, error: eventError } = await supabase
+        .from("events")
+        .update(eventPayload)
+        .eq("id", eventData.id)
+        .select("*")
+        .single();
+
+      if (eventError) throw eventError;
+
+      const settingsPayload = {
         event_id: eventData.id,
         allow_videos: form.allow_videos,
         max_photo_size_mb: Number(form.max_photo_size_mb),
@@ -260,12 +390,13 @@ export default function EventSettings() {
 
       const { data, error } = await supabase
         .from("event_settings")
-        .upsert(payload, { onConflict: "event_id" })
+        .upsert(settingsPayload, { onConflict: "event_id" })
         .select("*")
         .single();
 
       if (error) throw error;
 
+      setEventData(updatedEvent);
       setSettingsId(data.id);
       setMessage("Configurações salvas com sucesso.");
     } catch (error) {
@@ -384,24 +515,23 @@ export default function EventSettings() {
           <div>
             <p style={styles.kicker}>Evento selecionado</p>
             <p style={styles.heroSubtitle}>
-              Defina como sua galeria vai funcionar para convidados, uploads e
-              vídeos.
+              Defina como sua galeria vai funcionar para convidados, uploads,
+              vídeos e identidade visual.
             </p>
           </div>
 
           <div style={styles.heroActions}>
-  <button
-    type="button"
-    onClick={() => {
-      
-      navigate(backLink, { replace: true });
-    }}
-    style={styles.ghostButton}
-  >
-    <ArrowLeft size={16} />
-    Voltar 
-  </button>
-</div>
+            <button
+              type="button"
+              onClick={() => {
+                navigate(backLink, { replace: true });
+              }}
+              style={styles.ghostButton}
+            >
+              <ArrowLeft size={16} />
+              Voltar
+            </button>
+          </div>
         </section>
 
         {loading ? (
@@ -433,12 +563,15 @@ export default function EventSettings() {
                   </div>
                 </div>
 
-                <InfoBox label="Nome do evento" value={eventData.name} />
+                <InfoBox label="Nome do evento" value={eventForm.name || eventData.name} />
                 <InfoBox label="Slug" value={eventData.slug} />
-                <InfoBox label="Data" value={formatDate(eventData.event_date)} />
+                <InfoBox
+                  label="Data"
+                  value={formatDate(eventForm.event_date || eventData.event_date)}
+                />
                 <InfoBox
                   label="Upload para convidados"
-                  value={eventData.is_upload_open ? "Aberto" : "Fechado"}
+                  value={eventForm.is_upload_open ? "Aberto" : "Fechado"}
                 />
                 <InfoBox
                   label="Parceiro"
@@ -507,6 +640,194 @@ export default function EventSettings() {
                 </div>
 
                 <div style={styles.formGrid}>
+                  <label style={styles.field}>
+                    <span style={styles.label}>Nome do evento</span>
+                    <input
+                      type="text"
+                      name="name"
+                      value={eventForm.name}
+                      onChange={handleEventChange}
+                      style={styles.input}
+                      placeholder="Ex: Casamento Ana & Pedro"
+                    />
+                  </label>
+
+                  <label style={styles.field}>
+                    <span style={styles.label}>Data do evento</span>
+                    <input
+                      type="date"
+                      name="event_date"
+                      value={eventForm.event_date}
+                      onChange={handleEventChange}
+                      style={styles.input}
+                    />
+                  </label>
+
+                  <div style={styles.fullWidth}>
+                    <label style={styles.field}>
+                      <span style={styles.label}>Descrição</span>
+                      <textarea
+                        name="description"
+                        value={eventForm.description}
+                        onChange={handleEventChange}
+                        style={styles.textarea}
+                        placeholder="Descrição do evento"
+                      />
+                    </label>
+                  </div>
+
+                  <div style={styles.fullWidth}>
+                    <div style={styles.uploadGroup}>
+                      <label style={styles.field}>
+                        <span style={styles.label}>URL da capa</span>
+                        <input
+                          type="text"
+                          name="cover_url"
+                          value={eventForm.cover_url}
+                          onChange={handleEventChange}
+                          style={styles.input}
+                          placeholder="https://..."
+                        />
+                      </label>
+
+                      <label style={styles.field}>
+                        <span style={styles.label}>Upload da capa</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={styles.fileInput}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImageUpload(file, "cover");
+                          }}
+                        />
+                        <span style={styles.uploadHint}>
+                          {uploadingCover
+                            ? "Enviando capa..."
+                            : "Selecione uma imagem para capa"}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div style={styles.fullWidth}>
+                    <div style={styles.uploadGroup}>
+                      <label style={styles.field}>
+                        <span style={styles.label}>URL da logo</span>
+                        <input
+                          type="text"
+                          name="logo_url"
+                          value={eventForm.logo_url}
+                          onChange={handleEventChange}
+                          style={styles.input}
+                          placeholder="https://..."
+                        />
+                      </label>
+
+                      <label style={styles.field}>
+                        <span style={styles.label}>Upload da logo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={styles.fileInput}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImageUpload(file, "logo");
+                          }}
+                        />
+                        <span style={styles.uploadHint}>
+                          {uploadingLogo
+                            ? "Enviando logo..."
+                            : "Selecione uma imagem para logo"}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {eventForm.cover_url ? (
+                    <div style={styles.fullWidth}>
+                      <div style={styles.previewBox}>
+                        <span style={styles.infoLabel}>Prévia da capa</span>
+                        <img
+                          src={eventForm.cover_url}
+                          alt="Prévia da capa"
+                          style={styles.previewImage}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {eventForm.logo_url ? (
+                    <div style={styles.fullWidth}>
+                      <div style={styles.previewBox}>
+                        <span style={styles.infoLabel}>Prévia da logo</span>
+                        <img
+                          src={eventForm.logo_url}
+                          alt="Prévia da logo"
+                          style={styles.previewLogo}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <label style={styles.field}>
+                    <span style={styles.label}>Cor principal</span>
+                    <input
+                      type="color"
+                      name="primary_color"
+                      value={eventForm.primary_color}
+                      onChange={handleEventChange}
+                      style={styles.colorInput}
+                    />
+                  </label>
+
+                  <label style={styles.field}>
+                    <span style={styles.label}>Cor secundária</span>
+                    <input
+                      type="color"
+                      name="secondary_color"
+                      value={eventForm.secondary_color}
+                      onChange={handleEventChange}
+                      style={styles.colorInput}
+                    />
+                  </label>
+
+                  <label style={styles.field}>
+                    <span style={styles.label}>Cor de destaque</span>
+                    <input
+                      type="color"
+                      name="accent_color"
+                      value={eventForm.accent_color}
+                      onChange={handleEventChange}
+                      style={styles.colorInput}
+                    />
+                  </label>
+
+                  <div style={styles.fullWidth}>
+                    <label style={styles.field}>
+                      <span style={styles.label}>Instruções</span>
+                      <textarea
+                        name="instructions"
+                        value={eventForm.instructions}
+                        onChange={handleEventChange}
+                        style={styles.textarea}
+                        placeholder="Orientações para convidados ou equipe"
+                      />
+                    </label>
+                  </div>
+
+                  <div style={styles.fullWidth}>
+                    <label style={styles.checkboxRow}>
+                      <input
+                        type="checkbox"
+                        name="is_upload_open"
+                        checked={eventForm.is_upload_open}
+                        onChange={handleEventChange}
+                      />
+                      Upload aberto para convidados
+                    </label>
+                  </div>
+
                   <label style={styles.field}>
                     <span style={styles.label}>Modo da galeria</span>
                     <select
@@ -594,7 +915,7 @@ export default function EventSettings() {
                     <button
                       type="submit"
                       style={styles.primaryButton}
-                      disabled={saving}
+                      disabled={saving || uploadingCover || uploadingLogo}
                     >
                       <Save size={18} />
                       {saving ? "Salvando..." : "Salvar configurações"}
@@ -645,16 +966,15 @@ export default function EventSettings() {
 
                 <div style={styles.actionsRow}>
                   <button
-  type="button"
-  onClick={() => {
-    
-    navigate(backLink, { replace: true });
-  }}
-  style={styles.secondaryButton}
->
-  <ArrowLeft size={16} />
-  Voltar ao painel
-</button>
+                    type="button"
+                    onClick={() => {
+                      navigate(backLink, { replace: true });
+                    }}
+                    style={styles.secondaryButton}
+                  >
+                    <ArrowLeft size={16} />
+                    Voltar ao painel
+                  </button>
 
                   <Link
                     to={`/evento/${eventData.slug}/galeria`}
@@ -888,11 +1208,6 @@ const styles = {
     letterSpacing: ".08em",
     textTransform: "uppercase",
   },
-  heroTitle: {
-    margin: "10px 0 10px",
-    fontSize: "32px",
-    lineHeight: 1.1,
-  },
   heroSubtitle: {
     margin: 0,
     maxWidth: "700px",
@@ -1015,6 +1330,70 @@ const styles = {
     outline: "none",
     fontSize: "14px",
     background: "#fff",
+    width: "100%",
+    boxSizing: "border-box",
+  },
+  colorInput: {
+    width: "100%",
+    height: "46px",
+    borderRadius: "12px",
+    border: "1px solid #dfe3ec",
+    padding: "4px",
+    background: "#fff",
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    minHeight: "100px",
+    borderRadius: "12px",
+    border: "1px solid #dfe3ec",
+    padding: "12px",
+    resize: "vertical",
+    outline: "none",
+    fontSize: "14px",
+    fontFamily: "inherit",
+    background: "#fff",
+    boxSizing: "border-box",
+  },
+  uploadGroup: {
+    display: "grid",
+    gap: "12px",
+  },
+  fileInput: {
+    width: "100%",
+    minHeight: "46px",
+    borderRadius: "12px",
+    border: "1px solid #dfe3ec",
+    padding: "10px 12px",
+    outline: "none",
+    fontSize: "14px",
+    background: "#fff",
+    boxSizing: "border-box",
+  },
+  uploadHint: {
+    fontSize: "12px",
+    color: "#7c8295",
+    marginTop: "-2px",
+  },
+  previewBox: {
+    marginTop: "4px",
+    background: "#fff",
+    border: "1px solid #e7eaf2",
+    borderRadius: "14px",
+    padding: "10px",
+  },
+  previewImage: {
+    width: "100%",
+    maxHeight: "220px",
+    objectFit: "cover",
+    borderRadius: "10px",
+    display: "block",
+  },
+  previewLogo: {
+    maxWidth: "160px",
+    maxHeight: "100px",
+    objectFit: "contain",
+    display: "block",
   },
   inputDisabled: {
     background: "#f2f3f7",

@@ -879,36 +879,31 @@ export default function Dashboard() {
                         </button>
                       </div>
 
-                      <div
-                        style={{
-                          ...styles.qrActions,
-                          flexDirection: isSmallMobile ? "column" : "row",
-                          marginBottom: 0,
-                        }}
-                      >
-                        <a
-                          href={selectedLinks.uploadUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            ...styles.linkButton,
-                            width: isSmallMobile ? "100%" : "auto",
-                          }}
-                        >
-                          <ExternalLink size={16} />
-                          Abrir upload
-                        </a>
+                      <div style={styles.qrActions}>
+  <a
+    href={selectedLinks.uploadUrl}
+    target="_blank"
+    rel="noreferrer"
+    style={styles.linkButton}
+  >
+    <ExternalLink size={16} />
+    Abrir upload
+  </a>
 
-                        <Link
-                          to={`/evento/${selectedEvent.slug}/configuracoes`}
-                          style={{
-                            ...styles.linkButton,
-                            width: isSmallMobile ? "100%" : "auto",
-                          }}
-                        >
-                          Configurações
-                        </Link>
-                      </div>
+  <Link
+    to={`/meus-eventos/${selectedEvent.slug}`}
+    style={styles.linkButton}
+  >
+    Ver detalhes do evento
+  </Link>
+
+  <Link
+    to={`/evento/${selectedEvent.slug}/configuracoes`}
+    style={styles.linkButton}
+  >
+    Configurações
+  </Link>
+</div>
                     </div>
                   </>
                 )}

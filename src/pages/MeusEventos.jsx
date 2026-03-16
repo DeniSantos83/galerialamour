@@ -701,30 +701,41 @@ export default function MeusEventos() {
                   </div>
 
                   <div style={styles.qrActions}>
-                    <a
-                      href={selectedLinks.uploadUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        ...styles.primaryLinkButton,
-                        ...responsive.actionButton,
-                      }}
-                    >
-                      <ExternalLink size={16} />
-                      Abrir upload
-                    </a>
+  <a
+    href={selectedLinks.uploadUrl}
+    target="_blank"
+    rel="noreferrer"
+    style={{
+      ...styles.primaryLinkButton,
+      ...responsive.actionButton,
+    }}
+  >
+    <ExternalLink size={16} />
+    Abrir upload
+  </a>
 
-                    <Link
-                      to={`/evento/${selectedEvent.slug}/configuracoes`}
-                      style={{
-                        ...styles.secondaryLinkButton,
-                        ...responsive.actionButton,
-                      }}
-                    >
-                      <Settings size={16} />
-                      Configurações
-                    </Link>
-                  </div>
+  <Link
+    to={`/meus-eventos/${selectedEvent.slug}`}
+    style={{
+      ...styles.secondaryLinkButton,
+      ...responsive.actionButton,
+    }}
+  >
+    <Camera size={16} />
+    Ver detalhes do evento
+  </Link>
+
+  <Link
+    to={`/evento/${selectedEvent.slug}/configuracoes`}
+    style={{
+      ...styles.secondaryLinkButton,
+      ...responsive.actionButton,
+    }}
+  >
+    <Settings size={16} />
+    Configurações
+  </Link>
+</div>
                 </>
               )}
             </div>

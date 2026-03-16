@@ -11,6 +11,7 @@ export default function MeuEventoDetalhe() {
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [partner, setPartner] = useState(null);
   const [event, setEvent] = useState(null);
   const [settings, setSettings] = useState(null);
@@ -19,6 +20,16 @@ export default function MeuEventoDetalhe() {
   const [screenWidth, setScreenWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1440
   );
+
+  const [films, setFilms] = useState([]);
+  const [loadingFilms, setLoadingFilms] = useState(true);
+  const [creatingFilm, setCreatingFilm] = useState(false);
+  const [filmForm, setFilmForm] = useState({
+    duration_seconds: 30,
+    format: "landscape",
+    style: "romantic",
+    title: "",
+  });
 
   useEffect(() => {
     function handleResize() {
@@ -34,6 +45,7 @@ export default function MeuEventoDetalhe() {
       try {
         setLoading(true);
         setError("");
+        setLoadingFilms(true);
 
         const {
           data: { user },
@@ -45,42 +57,67 @@ export default function MeuEventoDetalhe() {
         if (!user) {
           setAuthChecked(true);
           setLoading(false);
+          setLoadingFilms(false);
           return;
         }
 
         setUser(user);
         setAuthChecked(true);
 
-        const { data: partnerData, error: partnerError } = await supabase
-          .from("partners")
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
           .select("*")
-          .eq("profile_id", user.id)
+          .eq("id", user.id)
           .maybeSingle();
 
-        if (partnerError) throw partnerError;
+        if (profileError) throw profileError;
 
-        if (!partnerData) {
+        setProfile(profileData || null);
+
+        const isAdmin = profileData?.role === "admin";
+
+        let partnerData = null;
+
+        if (!isAdmin) {
+          const { data: fetchedPartner, error: partnerError } = await supabase
+            .from("partners")
+            .select("*")
+            .eq("profile_id", user.id)
+            .maybeSingle();
+
+          if (partnerError) throw partnerError;
+
+          if (!fetchedPartner) {
+            setPartner(null);
+            setEvent(null);
+            setSettings(null);
+            setFilms([]);
+            setLoadingFilms(false);
+            setLoading(false);
+            return;
+          }
+
+          partnerData = fetchedPartner;
+          setPartner(fetchedPartner);
+        } else {
           setPartner(null);
-          setEvent(null);
-          setSettings(null);
-          setLoading(false);
-          return;
         }
 
-        setPartner(partnerData);
+        let eventQuery = supabase.from("events").select("*").eq("slug", slug);
 
-        const { data: eventData, error: eventError } = await supabase
-          .from("events")
-          .select("*")
-          .eq("slug", slug)
-          .eq("partner_id", partnerData.id)
-          .maybeSingle();
+        if (!isAdmin && partnerData?.id) {
+          eventQuery = eventQuery.eq("partner_id", partnerData.id);
+        }
+
+        const { data: eventData, error: eventError } = await eventQuery.maybeSingle();
 
         if (eventError) throw eventError;
 
         if (!eventData) {
           setEvent(null);
           setSettings(null);
+          setFilms([]);
+          setLoadingFilms(false);
           setLoading(false);
           return;
         }
@@ -96,11 +133,22 @@ export default function MeuEventoDetalhe() {
         if (settingsError) throw settingsError;
 
         setSettings(settingsData || null);
+
+        const { data: filmsData, error: filmsError } = await supabase
+          .from("event_films")
+          .select("*")
+          .eq("event_id", eventData.id)
+          .order("created_at", { ascending: false });
+
+        if (filmsError) throw filmsError;
+
+        setFilms(filmsData || []);
       } catch (err) {
         console.error("Erro ao carregar detalhe do evento:", err);
         setError(err.message || "Erro ao carregar o evento.");
       } finally {
         setLoading(false);
+        setLoadingFilms(false);
       }
     };
 
@@ -111,7 +159,6 @@ export default function MeuEventoDetalhe() {
     typeof window !== "undefined" ? window.location.origin : "";
 
   const isMobile = screenWidth <= MOBILE_BREAKPOINT;
-  const isTablet = screenWidth > MOBILE_BREAKPOINT && screenWidth <= TABLET_BREAKPOINT;
 
   const responsive = useMemo(
     () => getResponsiveStyles(screenWidth),
@@ -146,6 +193,10 @@ export default function MeuEventoDetalhe() {
       qrCodeUrl,
     };
   }, [event, baseUrl]);
+
+  const isAdmin = profile?.role === "admin";
+  const backLink = isAdmin ? "/painel" : "/meus-eventos";
+  const accessLabel = isAdmin ? "admin" : "parceiro";
 
   const copyText = async (text, key) => {
     if (!text) return;
@@ -184,6 +235,89 @@ export default function MeuEventoDetalhe() {
     return new Date(date).toLocaleDateString("pt-BR");
   };
 
+  const formatDateTime = (date) => {
+    if (!date) return "—";
+    return new Date(date).toLocaleString("pt-BR");
+  };
+
+  async function loadFilms(eventId) {
+    try {
+      setLoadingFilms(true);
+
+      const { data, error } = await supabase
+        .from("event_films")
+        .select("*")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      setFilms(data || []);
+    } catch (err) {
+      console.error("Erro ao carregar filmes:", err);
+    } finally {
+      setLoadingFilms(false);
+    }
+  }
+
+  async function handleGenerateFilm() {
+    if (!event?.id || !user?.id) {
+      alert("Evento ou usuário não identificado.");
+      return;
+    }
+
+    try {
+      setCreatingFilm(true);
+
+      const titleFinal =
+        filmForm.title?.trim() || `Filme de ${event.name || "Evento"}`;
+
+      const { data, error } = await supabase
+        .from("event_films")
+        .insert([
+          {
+            event_id: event.id,
+            created_by: user.id,
+            status: "queued",
+            duration_seconds: Number(filmForm.duration_seconds) || 30,
+            format: filmForm.format || "landscape",
+            style: filmForm.style || "romantic",
+            title: titleFinal,
+          },
+        ])
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setFilms((prev) => [data, ...prev]);
+      await fetch("/.netlify/functions/process-film", {
+  method: "POST",
+});
+      alert("Filme solicitado com sucesso.");
+    } catch (err) {
+      console.error("Erro ao criar filme:", err);
+      alert(err.message || "Erro ao gerar filme.");
+    } finally {
+      setCreatingFilm(false);
+    }
+  }
+
+  function translateFilmStatus(status) {
+    switch (status) {
+      case "queued":
+        return "Na fila";
+      case "processing":
+        return "Processando";
+      case "ready":
+        return "Pronto";
+      case "failed":
+        return "Falhou";
+      default:
+        return status || "Desconhecido";
+    }
+  }
+
   if (authChecked && !user && !loading) {
     return <Navigate to="/login" replace />;
   }
@@ -203,16 +337,26 @@ export default function MeuEventoDetalhe() {
           }}
         >
           <Link
-            to="/meus-eventos"
+            to={backLink}
             style={{
               ...styles.backLink,
               ...responsive.backLink,
             }}
           >
-            ← Voltar para meus eventos
+            ← {isAdmin ? "Voltar para o painel" : "Voltar para meus eventos"}
           </Link>
 
-          {partner && (
+          {isAdmin ? (
+            <div
+              style={{
+                ...styles.partnerChip,
+                ...responsive.partnerChip,
+              }}
+            >
+              <span style={styles.partnerChipLabel}>Acesso</span>
+              <strong style={styles.partnerChipName}>Administrador</strong>
+            </div>
+          ) : partner ? (
             <div
               style={{
                 ...styles.partnerChip,
@@ -220,9 +364,11 @@ export default function MeuEventoDetalhe() {
               }}
             >
               <span style={styles.partnerChipLabel}>Parceiro</span>
-              <strong style={styles.partnerChipName}>{partner.name}</strong>
+              <strong style={styles.partnerChipName}>
+                {partner.studio_name || partner.name || "Parceiro"}
+              </strong>
             </div>
-          )}
+          ) : null}
         </div>
 
         {loading && (
@@ -237,13 +383,13 @@ export default function MeuEventoDetalhe() {
           </div>
         )}
 
-        {!loading && !error && !partner && (
+        {!loading && !error && !isAdmin && !partner && (
           <div style={styles.stateBox}>
             <p>Nenhum parceiro vinculado foi encontrado para este login.</p>
           </div>
         )}
 
-        {!loading && !error && partner && !event && (
+        {!loading && !error && !event && (
           <div style={styles.stateBox}>
             <p>Evento não encontrado ou sem permissão de acesso.</p>
           </div>
@@ -273,7 +419,9 @@ export default function MeuEventoDetalhe() {
                 </div>
 
                 <div style={styles.heroTopRight}>
-                  <span style={styles.heroMiniTag}>Acesso parceiro</span>
+                  <span style={styles.heroMiniTag}>
+                    Acesso {isAdmin ? "admin" : "parceiro"}
+                  </span>
                 </div>
               </div>
 
@@ -312,7 +460,7 @@ export default function MeuEventoDetalhe() {
                   }}
                 >
                   <InfoBox label="Slug" value={event.slug} />
-                  <InfoBox label="Acesso" value="parceiro" />
+                  <InfoBox label="Acesso" value={accessLabel} />
                   <InfoBox label="Data do evento" value={formatDate(event.event_date)} />
                   <InfoBox
                     label="Upload"
@@ -358,6 +506,221 @@ export default function MeuEventoDetalhe() {
                   openLabel="Abrir pública"
                   isMobile={isMobile}
                 />
+                {isAdmin && (
+  <div style={styles.sectionBlock}>
+    <div style={styles.sectionTitle}>Utilidades do evento</div>
+
+    <div style={styles.linkCard}>
+      <p style={styles.helperText}>
+        Ferramentas rápidas para gerenciar este evento.
+      </p>
+
+      <div style={styles.linkActions}>
+        <Link
+          to={`/evento/${event.slug}/configuracoes`}
+          style={{
+            ...styles.darkButtonSmall,
+            ...(isMobile ? styles.mobileActionButton : {}),
+          }}
+        >
+          ⚙️ Configurações do evento
+        </Link>
+
+        <a
+          href={urls.publicGalleryUrl}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            ...styles.lightButtonSmall,
+            ...(isMobile ? styles.mobileActionButton : {}),
+          }}
+        >
+          🌐 Abrir galeria pública
+        </a>
+
+        <a
+          href={urls.uploadUrl}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            ...styles.lightButtonSmall,
+            ...(isMobile ? styles.mobileActionButton : {}),
+          }}
+        >
+          📤 Abrir página de upload
+        </a>
+      </div>
+    </div>
+  </div>
+)}
+                <div style={styles.sectionBlock}>
+                  <div style={styles.sectionTitle}>Filme automático da festa</div>
+
+                  <div style={styles.linkCard}>
+                    <p style={styles.helperText}>
+                      Gere um highlight automático com as mídias aprovadas do evento.
+                    </p>
+
+                    <div style={styles.filmFormGrid}>
+                      <label style={styles.field}>
+                        <span style={styles.infoLabel}>Título do filme</span>
+                        <input
+                          type="text"
+                          value={filmForm.title}
+                          onChange={(e) =>
+                            setFilmForm((prev) => ({
+                              ...prev,
+                              title: e.target.value,
+                            }))
+                          }
+                          style={styles.input}
+                          placeholder={`Filme de ${event?.name || "Evento"}`}
+                        />
+                      </label>
+
+                      <label style={styles.field}>
+                        <span style={styles.infoLabel}>Duração</span>
+                        <select
+                          value={filmForm.duration_seconds}
+                          onChange={(e) =>
+                            setFilmForm((prev) => ({
+                              ...prev,
+                              duration_seconds: Number(e.target.value),
+                            }))
+                          }
+                          style={styles.input}
+                        >
+                          <option value={30}>30 segundos</option>
+                          <option value={60}>60 segundos</option>
+                        </select>
+                      </label>
+
+                      <label style={styles.field}>
+                        <span style={styles.infoLabel}>Formato</span>
+                        <select
+                          value={filmForm.format}
+                          onChange={(e) =>
+                            setFilmForm((prev) => ({
+                              ...prev,
+                              format: e.target.value,
+                            }))
+                          }
+                          style={styles.input}
+                        >
+                          <option value="landscape">Horizontal</option>
+                          <option value="portrait">Vertical</option>
+                        </select>
+                      </label>
+
+                      <label style={styles.field}>
+                        <span style={styles.infoLabel}>Estilo</span>
+                        <select
+                          value={filmForm.style}
+                          onChange={(e) =>
+                            setFilmForm((prev) => ({
+                              ...prev,
+                              style: e.target.value,
+                            }))
+                          }
+                          style={styles.input}
+                        >
+                          <option value="romantic">Romântico</option>
+                          <option value="elegant">Elegante</option>
+                          <option value="party">Animado</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div style={styles.linkActions}>
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.darkButtonSmall,
+                          ...(isMobile ? styles.mobileActionButton : {}),
+                        }}
+                        onClick={handleGenerateFilm}
+                        disabled={creatingFilm}
+                      >
+                        {creatingFilm ? "Gerando..." : "Gerar filme"}
+                      </button>
+
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.lightButtonSmall,
+                          ...(isMobile ? styles.mobileActionButton : {}),
+                        }}
+                        onClick={() => loadFilms(event.id)}
+                        disabled={loadingFilms}
+                      >
+                        {loadingFilms ? "Atualizando..." : "Atualizar lista"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={styles.sectionBlock}>
+                  <div style={styles.sectionTitle}>Filmes gerados</div>
+
+                  <div style={styles.linkCard}>
+                    {loadingFilms ? (
+                      <p style={styles.helperText}>Carregando filmes...</p>
+                    ) : films.length === 0 ? (
+                      <p style={styles.helperText}>Nenhum filme gerado ainda.</p>
+                    ) : (
+                      <div style={styles.filmList}>
+                        {films.map((film) => (
+                          <div key={film.id} style={styles.filmItem}>
+                            <div style={styles.filmInfo}>
+                              <strong style={styles.infoValue}>
+                                {film.title || "Filme sem título"}
+                              </strong>
+
+                              <div style={styles.filmMeta}>
+                                {film.duration_seconds}s • {film.format} • {film.style}
+                              </div>
+
+                              <div style={styles.filmMeta}>
+                                Status:{" "}
+                                <strong>{translateFilmStatus(film.status)}</strong>
+                              </div>
+
+                              <div style={styles.filmMeta}>
+                                Criado em: {formatDateTime(film.created_at)}
+                              </div>
+
+                              {film.error_message ? (
+                                <div style={styles.filmError}>
+                                  Erro: {film.error_message}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div style={styles.filmActions}>
+                              {film.output_url ? (
+                                <a
+                                  href={film.output_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{
+                                    ...styles.lightButtonSmall,
+                                    ...(isMobile ? styles.mobileActionButton : {}),
+                                  }}
+                                >
+                                  Abrir filme
+                                </a>
+                              ) : (
+                                <span style={styles.statusBadge}>
+                                  {translateFilmStatus(film.status)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div style={styles.rightColumn}>
@@ -467,7 +830,8 @@ function LinkCard({ title, url, copyLabel, onCopy, openLabel, isMobile }) {
 
 function getResponsiveStyles(screenWidth) {
   const isMobile = screenWidth <= MOBILE_BREAKPOINT;
-  const isTablet = screenWidth > MOBILE_BREAKPOINT && screenWidth <= TABLET_BREAKPOINT;
+  const isTablet =
+    screenWidth > MOBILE_BREAKPOINT && screenWidth <= TABLET_BREAKPOINT;
 
   if (isMobile) {
     return {
@@ -691,6 +1055,9 @@ const styles = {
     color: "#b68628",
     marginBottom: "14px",
   },
+  sectionBlock: {
+    marginTop: "18px",
+  },
   infoGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
@@ -740,6 +1107,12 @@ const styles = {
     padding: "10px 12px",
     wordBreak: "break-word",
     marginBottom: "12px",
+  },
+  helperText: {
+    margin: "0 0 14px",
+    color: "#5f667d",
+    fontSize: "13px",
+    lineHeight: 1.5,
   },
   linkActions: {
     display: "flex",
@@ -822,29 +1195,104 @@ const styles = {
     padding: "10px 14px",
   },
   darkButtonSmall: {
-    minHeight: "40px",
-    padding: "10px 14px",
+    minHeight: "42px",
     border: "none",
     borderRadius: "12px",
     background: "#1e2440",
     color: "#fff",
     fontWeight: 700,
     cursor: "pointer",
-  },
-  lightButtonSmall: {
+    padding: "10px 14px",
+    textDecoration: "none",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: "40px",
-    padding: "10px 14px",
+  },
+  lightButtonSmall: {
+    minHeight: "42px",
     border: "1px solid #dbe0ea",
     borderRadius: "12px",
     background: "#fff",
     color: "#6b7390",
     fontWeight: 700,
+    cursor: "pointer",
+    padding: "10px 14px",
     textDecoration: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   mobileActionButton: {
     width: "100%",
+  },
+  filmFormGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "12px",
+    marginBottom: "14px",
+  },
+  field: {
+    display: "grid",
+    gap: "6px",
+  },
+  input: {
+    width: "100%",
+    minHeight: "44px",
+    borderRadius: "12px",
+    border: "1px solid #dbe0ea",
+    background: "#fff",
+    color: "#23283a",
+    padding: "10px 12px",
+    fontSize: "14px",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  filmList: {
+    display: "grid",
+    gap: "12px",
+  },
+  filmItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "12px",
+    flexWrap: "wrap",
+    border: "1px solid #e6e9f3",
+    background: "#fff",
+    borderRadius: "14px",
+    padding: "14px",
+  },
+  filmInfo: {
+    flex: 1,
+    minWidth: "220px",
+  },
+  filmMeta: {
+    fontSize: "13px",
+    color: "#687086",
+    marginTop: "4px",
+    wordBreak: "break-word",
+  },
+  filmError: {
+    marginTop: "6px",
+    fontSize: "13px",
+    color: "#b42318",
+    wordBreak: "break-word",
+  },
+  filmActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  },
+  statusBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "38px",
+    padding: "0 12px",
+    borderRadius: "999px",
+    background: "#eef2ff",
+    color: "#344054",
+    fontWeight: 700,
+    fontSize: "13px",
   },
 };
