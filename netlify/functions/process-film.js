@@ -11,18 +11,51 @@ const supabase = createClient(
 );
 
 async function downloadToFile(url, outputPath) {
+  console.log("Baixando arquivo:", url);
+
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`Falha ao baixar arquivo: ${url}`);
+    throw new Error(`Falha ao baixar arquivo: ${url} | status ${response.status}`);
   }
 
   const arrayBuffer = await response.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   await fs.promises.writeFile(outputPath, buffer);
+
+  console.log("Arquivo salvo em:", outputPath);
+}
+
+async function getDownloadUrl(item) {
+  if (item.file_url) {
+    return item.file_url;
+  }
+
+  if (!item.file_path) {
+    throw new Error(`Upload ${item.id} sem file_url e sem file_path.`);
+  }
+
+  const { data, error } = await supabase.storage
+    .from("event-media")
+    .createSignedUrl(item.file_path, 60 * 60);
+
+  if (error) {
+    throw new Error(
+      `Não foi possível gerar signed URL para o upload ${item.id}: ${error.message}`
+    );
+  }
+
+  if (!data?.signedUrl) {
+    throw new Error(`Signed URL vazia para o upload ${item.id}.`);
+  }
+
+  return data.signedUrl;
 }
 
 function runFfmpeg(args) {
+  console.log("Executando ffmpeg:", ffmpegPath);
+  console.log("Args:", args.join(" "));
+
   return new Promise((resolve, reject) => {
     const child = spawn(ffmpegPath, args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -42,6 +75,10 @@ function runFfmpeg(args) {
     child.on("error", (err) => reject(err));
 
     child.on("close", (code) => {
+      console.log("FFmpeg finalizou com código:", code);
+      console.log("FFmpeg stdout:", stdout);
+      console.log("FFmpeg stderr:", stderr);
+
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
@@ -55,8 +92,12 @@ function runFfmpeg(args) {
 
 exports.handler = async function () {
   let tmpDir = null;
+  let currentFilmId = null;
 
   try {
+    console.log("Iniciando processamento de filme...");
+    console.log("ffmpegPath:", ffmpegPath);
+
     const { data: film, error: fetchError } = await supabase
       .from("event_films")
       .select("*")
@@ -68,6 +109,7 @@ exports.handler = async function () {
     if (fetchError) throw fetchError;
 
     if (!film) {
+      console.log("Nenhum filme na fila.");
       return {
         statusCode: 200,
         body: JSON.stringify({
@@ -76,6 +118,9 @@ exports.handler = async function () {
         }),
       };
     }
+
+    currentFilmId = film.id;
+    console.log("Filme encontrado:", film.id);
 
     const { error: processingError } = await supabase
       .from("event_films")
@@ -87,6 +132,8 @@ exports.handler = async function () {
 
     if (processingError) throw processingError;
 
+    console.log("Status alterado para processing.");
+
     const { data: uploads, error: uploadsError } = await supabase
       .from("uploads")
       .select("*")
@@ -96,32 +143,22 @@ exports.handler = async function () {
 
     if (uploadsError) throw uploadsError;
 
+    console.log("Uploads aprovados encontrados:", uploads?.length || 0);
+
     const approvedImages = (uploads || []).filter((item) => {
       const type = String(item.file_type || "").toLowerCase();
       const mime = String(item.mime_type || "").toLowerCase();
       return type === "image" || mime.startsWith("image/");
     });
 
-    if (!approvedImages.length) {
-      await supabase
-        .from("event_films")
-        .update({
-          status: "failed",
-          error_message: "Nenhuma imagem aprovada encontrada para este evento.",
-        })
-        .eq("id", film.id);
+    console.log("Imagens aprovadas filtradas:", approvedImages.length);
 
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          ok: false,
-          message: "Nenhuma imagem aprovada encontrada.",
-          filmId: film.id,
-        }),
-      };
+    if (!approvedImages.length) {
+      throw new Error("Nenhuma imagem aprovada encontrada para este evento.");
     }
 
     const selectedImages = approvedImages.slice(0, 12);
+    console.log("Imagens selecionadas:", selectedImages.length);
 
     await supabase.from("event_film_items").delete().eq("film_id", film.id);
 
@@ -140,7 +177,12 @@ exports.handler = async function () {
 
     if (itemsError) throw itemsError;
 
-    tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `film-${film.id}-`));
+    console.log("event_film_items gravado.");
+
+    tmpDir = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), `film-${film.id}-`)
+    );
+    console.log("Diretório temporário:", tmpDir);
 
     const imageListPath = path.join(tmpDir, "images.txt");
     const localImagePaths = [];
@@ -151,8 +193,14 @@ exports.handler = async function () {
         path.extname(item.file_path || "") ||
         (item.mime_type?.includes("png") ? ".png" : ".jpg");
 
-      const localPath = path.join(tmpDir, `img-${String(i).padStart(3, "0")}${ext}`);
-      await downloadToFile(item.file_url, localPath);
+      const localPath = path.join(
+        tmpDir,
+        `img-${String(i).padStart(3, "0")}${ext}`
+      );
+
+      const downloadUrl = await getDownloadUrl(item);
+      await downloadToFile(downloadUrl, localPath);
+
       localImagePaths.push(localPath);
     }
 
@@ -173,6 +221,8 @@ exports.handler = async function () {
       `${imageListContent}\nfile '${lastImageEscaped}'\n`,
       "utf8"
     );
+
+    console.log("images.txt criado:", imageListPath);
 
     const outputMp4Path = path.join(tmpDir, "highlight.mp4");
 
@@ -195,6 +245,8 @@ exports.handler = async function () {
       outputMp4Path,
     ]);
 
+    console.log("MP4 gerado:", outputMp4Path);
+
     const fileBuffer = await fs.promises.readFile(outputMp4Path);
     const storagePath = `${film.event_id}/${film.id}/highlight.mp4`;
 
@@ -207,11 +259,15 @@ exports.handler = async function () {
 
     if (uploadFilmError) throw uploadFilmError;
 
+    console.log("Upload do filme concluído:", storagePath);
+
     const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from("event-films")
       .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
 
     if (signedUrlError) throw signedUrlError;
+
+    console.log("Signed URL gerada.");
 
     const { error: readyError } = await supabase
       .from("event_films")
@@ -225,6 +281,8 @@ exports.handler = async function () {
 
     if (readyError) throw readyError;
 
+    console.log("Filme finalizado com sucesso.");
+
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -237,6 +295,20 @@ exports.handler = async function () {
     };
   } catch (error) {
     console.error("Erro ao processar filme:", error);
+
+    if (currentFilmId) {
+      try {
+        await supabase
+          .from("event_films")
+          .update({
+            status: "failed",
+            error_message: error.message || "Erro interno ao processar filme.",
+          })
+          .eq("id", currentFilmId);
+      } catch (updateError) {
+        console.error("Erro ao marcar filme como failed:", updateError);
+      }
+    }
 
     return {
       statusCode: 500,
