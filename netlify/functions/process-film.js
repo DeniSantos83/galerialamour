@@ -157,7 +157,29 @@ exports.handler = async function () {
       throw new Error("Nenhuma imagem aprovada encontrada para este evento.");
     }
 
-    const selectedImages = approvedImages.slice(0, 12);
+    const { data: usedMediaRows, error: usedMediaError } = await supabase
+      .from("event_film_items")
+      .select("media_id");
+
+    if (usedMediaError) throw usedMediaError;
+
+    const usedMediaIds = new Set(
+      (usedMediaRows || [])
+        .map((row) => row.media_id)
+        .filter(Boolean)
+    );
+
+    const unusedImages = approvedImages.filter((item) => !usedMediaIds.has(item.id));
+
+    console.log("Imagens ainda não usadas:", unusedImages.length);
+
+    if (!unusedImages.length) {
+      throw new Error(
+        "Todas as imagens aprovadas deste evento já foram usadas em filmes anteriores."
+      );
+    }
+
+    const selectedImages = unusedImages.slice(0, 12);
     console.log("Imagens selecionadas:", selectedImages.length);
 
     await supabase.from("event_film_items").delete().eq("film_id", film.id);
