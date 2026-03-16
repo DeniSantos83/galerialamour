@@ -16,6 +16,7 @@ import {
   Sparkles,
   Shield,
   Images,
+  Download,
 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { formatBytes } from "../lib/utils"
@@ -248,6 +249,7 @@ export default function EventGalleryPage() {
   const [updatingId, setUpdatingId] = useState(null)
   const [userRole, setUserRole] = useState("viewer")
   const [filter, setFilter] = useState("all")
+  const [zipLoading, setZipLoading] = useState(false)
 
   useEffect(() => {
     async function loadUser() {
@@ -447,6 +449,44 @@ export default function EventGalleryPage() {
     updateStatus(item, "rejected")
   }
 
+  async function downloadZip() {
+    if (!event?.id) {
+      alert("Evento não identificado.")
+      return
+    }
+
+    try {
+      setZipLoading(true)
+
+      const response = await fetch("/.netlify/functions/download-gallery-zip", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          event_id: event.id,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Não foi possível gerar o ZIP da galeria.")
+      }
+
+      if (!data?.url) {
+        throw new Error("A função não retornou um link para download.")
+      }
+
+      window.open(data.url, "_blank", "noopener,noreferrer")
+    } catch (err) {
+      console.error("Erro ao baixar ZIP:", err)
+      alert(err.message || "Erro ao gerar ZIP da galeria.")
+    } finally {
+      setZipLoading(false)
+    }
+  }
+
   if (loadingUser) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
@@ -583,9 +623,25 @@ export default function EventGalleryPage() {
               Pendentes
             </button>
 
-            <div className="ml-auto hidden items-center gap-2 rounded-full bg-yellow-100 px-3 py-2 text-sm font-medium text-yellow-700 sm:inline-flex">
-              <Shield className="h-4 w-4" />
-              Moderação ativa
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={downloadZip}
+                disabled={zipLoading || stats.approved === 0}
+                className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {zipLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {zipLoading ? "Gerando ZIP..." : "Baixar todas em ZIP"}
+              </button>
+
+              <div className="hidden items-center gap-2 rounded-full bg-yellow-100 px-3 py-2 text-sm font-medium text-yellow-700 sm:inline-flex">
+                <Shield className="h-4 w-4" />
+                Moderação ativa
+              </div>
             </div>
           </div>
         </section>
