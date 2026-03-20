@@ -1,35 +1,50 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
+import {
+  ArrowLeft,
+  Download,
+  ExternalLink,
+  Globe,
+  Image as ImageIcon,
+  Instagram,
+  Link2,
+  MessageCircle,
+  Settings,
+  Sparkles,
+  UserCircle2,
+} from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 const MOBILE_BREAKPOINT = 768;
-const TABLET_BREAKPOINT = 1024;
+const TABLET_BREAKPOINT = 1080;
 
 export default function MeuEventoDetalhe() {
   const { slug } = useParams();
 
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
+
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [partner, setPartner] = useState(null);
   const [event, setEvent] = useState(null);
   const [settings, setSettings] = useState(null);
+
   const [error, setError] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
   const [screenWidth, setScreenWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1440
   );
 
-  const [films, setFilms] = useState([]);
-  const [loadingFilms, setLoadingFilms] = useState(true);
-  const [creatingFilm, setCreatingFilm] = useState(false);
-  const [filmForm, setFilmForm] = useState({
-    duration_seconds: 30,
-    format: "landscape",
-    style: "romantic",
-    title: "",
-  });
+  const baseUrl =
+    typeof window !== "undefined" ? window.location.origin : "";
+
+  const isMobile = screenWidth <= MOBILE_BREAKPOINT;
+
+  const responsive = useMemo(
+    () => getResponsiveStyles(screenWidth),
+    [screenWidth]
+  );
 
   useEffect(() => {
     function handleResize() {
@@ -41,33 +56,35 @@ export default function MeuEventoDetalhe() {
   }, []);
 
   useEffect(() => {
-    const loadEvent = async () => {
+    async function loadEvent() {
       try {
         setLoading(true);
         setError("");
-        setLoadingFilms(true);
 
         const {
-          data: { user },
+          data: { user: authUser },
           error: userError,
         } = await supabase.auth.getUser();
 
         if (userError) throw userError;
 
-        if (!user) {
+        if (!authUser) {
           setAuthChecked(true);
-          setLoading(false);
-          setLoadingFilms(false);
+          setUser(null);
+          setProfile(null);
+          setPartner(null);
+          setEvent(null);
+          setSettings(null);
           return;
         }
 
-        setUser(user);
+        setUser(authUser);
         setAuthChecked(true);
 
         const { data: profileData, error: profileError } = await supabase
           .from("profiles")
           .select("*")
-          .eq("id", user.id)
+          .eq("id", authUser.id)
           .maybeSingle();
 
         if (profileError) throw profileError;
@@ -76,49 +93,66 @@ export default function MeuEventoDetalhe() {
 
         const isAdmin = profileData?.role === "admin";
 
-        let partnerData = null;
+        let currentPartner = null;
+        let eventData = null;
 
-        if (!isAdmin) {
-          const { data: fetchedPartner, error: partnerError } = await supabase
+        if (isAdmin) {
+          const { data: adminEvent, error: adminEventError } = await supabase
+            .from("events")
+            .select("*")
+            .eq("slug", slug)
+            .maybeSingle();
+
+          if (adminEventError) throw adminEventError;
+
+          eventData = adminEvent || null;
+
+          if (eventData?.partner_id) {
+            const { data: linkedPartner, error: linkedPartnerError } =
+              await supabase
+                .from("partners")
+                .select("*")
+                .eq("id", eventData.partner_id)
+                .maybeSingle();
+
+            if (linkedPartnerError) throw linkedPartnerError;
+            currentPartner = linkedPartner || null;
+          }
+        } else {
+          const { data: partnerData, error: partnerError } = await supabase
             .from("partners")
             .select("*")
-            .eq("profile_id", user.id)
+            .eq("profile_id", authUser.id)
             .maybeSingle();
 
           if (partnerError) throw partnerError;
 
-          if (!fetchedPartner) {
+          if (!partnerData) {
             setPartner(null);
             setEvent(null);
             setSettings(null);
-            setFilms([]);
-            setLoadingFilms(false);
-            setLoading(false);
             return;
           }
 
-          partnerData = fetchedPartner;
-          setPartner(fetchedPartner);
-        } else {
-          setPartner(null);
+          currentPartner = partnerData;
+
+          const { data: partnerEvent, error: partnerEventError } = await supabase
+            .from("events")
+            .select("*")
+            .eq("slug", slug)
+            .eq("partner_id", partnerData.id)
+            .maybeSingle();
+
+          if (partnerEventError) throw partnerEventError;
+
+          eventData = partnerEvent || null;
         }
 
-        let eventQuery = supabase.from("events").select("*").eq("slug", slug);
-
-        if (!isAdmin && partnerData?.id) {
-          eventQuery = eventQuery.eq("partner_id", partnerData.id);
-        }
-
-        const { data: eventData, error: eventError } = await eventQuery.maybeSingle();
-
-        if (eventError) throw eventError;
+        setPartner(currentPartner || null);
 
         if (!eventData) {
           setEvent(null);
           setSettings(null);
-          setFilms([]);
-          setLoadingFilms(false);
-          setLoading(false);
           return;
         }
 
@@ -133,37 +167,18 @@ export default function MeuEventoDetalhe() {
         if (settingsError) throw settingsError;
 
         setSettings(settingsData || null);
-
-        const { data: filmsData, error: filmsError } = await supabase
-          .from("event_films")
-          .select("*")
-          .eq("event_id", eventData.id)
-          .order("created_at", { ascending: false });
-
-        if (filmsError) throw filmsError;
-
-        setFilms(filmsData || []);
       } catch (err) {
         console.error("Erro ao carregar detalhe do evento:", err);
-        setError(err.message || "Erro ao carregar o evento.");
+        setError(err?.message || "Erro ao carregar o evento.");
       } finally {
         setLoading(false);
-        setLoadingFilms(false);
       }
-    };
+    }
 
     loadEvent();
   }, [slug]);
 
-  const baseUrl =
-    typeof window !== "undefined" ? window.location.origin : "";
-
-  const isMobile = screenWidth <= MOBILE_BREAKPOINT;
-
-  const responsive = useMemo(
-    () => getResponsiveStyles(screenWidth),
-    [screenWidth]
-  );
+  const backTo = profile?.role === "admin" ? "/painel" : "/meus-eventos";
 
   const urls = useMemo(() => {
     if (!event?.slug) {
@@ -180,7 +195,6 @@ export default function MeuEventoDetalhe() {
     const publicGalleryUrl = `${baseUrl}/galeria/${event.slug}`;
     const privateGalleryUrl = `${baseUrl}/evento/${event.slug}/galeria`;
     const qrTargetUrl = uploadUrl;
-
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(
       qrTargetUrl
     )}`;
@@ -194,12 +208,9 @@ export default function MeuEventoDetalhe() {
     };
   }, [event, baseUrl]);
 
-  const isAdmin = profile?.role === "admin";
-  const backLink = isAdmin ? "/painel" : "/meus-eventos";
-  const accessLabel = isAdmin ? "admin" : "parceiro";
-
-  const copyText = async (text, key) => {
+  async function copyText(text, key) {
     if (!text) return;
+
     try {
       await navigator.clipboard.writeText(text);
       setCopiedKey(key);
@@ -207,9 +218,9 @@ export default function MeuEventoDetalhe() {
     } catch (err) {
       console.error("Erro ao copiar:", err);
     }
-  };
+  }
 
-  const downloadQrCode = async () => {
+  async function downloadQrCode() {
     if (!urls.qrCodeUrl || !event?.slug) return;
 
     try {
@@ -228,94 +239,31 @@ export default function MeuEventoDetalhe() {
     } catch (err) {
       console.error("Erro ao baixar QR Code:", err);
     }
-  };
-
-  const formatDate = (date) => {
-    if (!date) return "—";
-    return new Date(date).toLocaleDateString("pt-BR");
-  };
-
-  const formatDateTime = (date) => {
-    if (!date) return "—";
-    return new Date(date).toLocaleString("pt-BR");
-  };
-
-  async function loadFilms(eventId) {
-    try {
-      setLoadingFilms(true);
-
-      const { data, error } = await supabase
-        .from("event_films")
-        .select("*")
-        .eq("event_id", eventId)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      setFilms(data || []);
-    } catch (err) {
-      console.error("Erro ao carregar filmes:", err);
-    } finally {
-      setLoadingFilms(false);
-    }
   }
 
-  async function handleGenerateFilm() {
-    if (!event?.id || !user?.id) {
-      alert("Evento ou usuário não identificado.");
-      return;
-    }
+  function formatDate(date) {
+    if (!date) return "—";
 
-    try {
-      setCreatingFilm(true);
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return "—";
 
-      const titleFinal =
-        filmForm.title?.trim() || `Filme de ${event.name || "Evento"}`;
-
-      const { data, error } = await supabase
-        .from("event_films")
-        .insert([
-          {
-            event_id: event.id,
-            created_by: user.id,
-            status: "queued",
-            duration_seconds: Number(filmForm.duration_seconds) || 30,
-            format: filmForm.format || "landscape",
-            style: filmForm.style || "romantic",
-            title: titleFinal,
-          },
-        ])
-        .select("*")
-        .single();
-
-      if (error) throw error;
-
-      setFilms((prev) => [data, ...prev]);
-      await fetch("/.netlify/functions/process-film", {
-  method: "POST",
-});
-      alert("Filme solicitado com sucesso.");
-    } catch (err) {
-      console.error("Erro ao criar filme:", err);
-      alert(err.message || "Erro ao gerar filme.");
-    } finally {
-      setCreatingFilm(false);
-    }
+    return parsed.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   }
 
-  function translateFilmStatus(status) {
-    switch (status) {
-      case "queued":
-        return "Na fila";
-      case "processing":
-        return "Processando";
-      case "ready":
-        return "Pronto";
-      case "failed":
-        return "Falhou";
-      default:
-        return status || "Desconhecido";
-    }
+  function normalizeInstagram(value) {
+    if (!value) return "";
+    if (value.startsWith("http")) return value;
+    return `https://instagram.com/${value.replace("@", "").trim()}`;
+  }
+
+  function normalizeWhatsapp(value) {
+    if (!value) return "";
+    const clean = value.replace(/\D/g, "");
+    return clean ? `https://wa.me/${clean}` : "";
   }
 
   if (authChecked && !user && !loading) {
@@ -324,6 +272,9 @@ export default function MeuEventoDetalhe() {
 
   return (
     <div style={styles.page}>
+      <div style={styles.glowOne} />
+      <div style={styles.glowTwo} />
+
       <div
         style={{
           ...styles.container,
@@ -337,26 +288,19 @@ export default function MeuEventoDetalhe() {
           }}
         >
           <Link
-            to={backLink}
+            to={backTo}
             style={{
               ...styles.backLink,
               ...responsive.backLink,
             }}
           >
-            ← {isAdmin ? "Voltar para o painel" : "Voltar para meus eventos"}
+            <ArrowLeft size={16} />
+            {profile?.role === "admin"
+              ? "Voltar para o painel"
+              : "Voltar para meus eventos"}
           </Link>
 
-          {isAdmin ? (
-            <div
-              style={{
-                ...styles.partnerChip,
-                ...responsive.partnerChip,
-              }}
-            >
-              <span style={styles.partnerChipLabel}>Acesso</span>
-              <strong style={styles.partnerChipName}>Administrador</strong>
-            </div>
-          ) : partner ? (
+          {partner ? (
             <div
               style={{
                 ...styles.partnerChip,
@@ -365,62 +309,59 @@ export default function MeuEventoDetalhe() {
             >
               <span style={styles.partnerChipLabel}>Parceiro</span>
               <strong style={styles.partnerChipName}>
-                {partner.studio_name || partner.name || "Parceiro"}
+                {partner.studio_name || partner.name || "Fotógrafo parceiro"}
               </strong>
             </div>
           ) : null}
         </div>
 
-        {loading && (
+        {loading ? (
           <div style={styles.stateBox}>
-            <p>Carregando evento...</p>
+            <p style={styles.stateText}>Carregando evento...</p>
           </div>
-        )}
-
-        {!loading && error && (
+        ) : error ? (
           <div style={styles.stateBoxError}>
-            <p>{error}</p>
+            <p style={styles.stateText}>{error}</p>
           </div>
-        )}
-
-        {!loading && !error && !isAdmin && !partner && (
+        ) : !event ? (
           <div style={styles.stateBox}>
-            <p>Nenhum parceiro vinculado foi encontrado para este login.</p>
+            <p style={styles.stateText}>
+              Evento não encontrado ou sem permissão de acesso.
+            </p>
           </div>
-        )}
-
-        {!loading && !error && !event && (
-          <div style={styles.stateBox}>
-            <p>Evento não encontrado ou sem permissão de acesso.</p>
-          </div>
-        )}
-
-        {!loading && !error && event && (
-          <div style={styles.contentCard}>
-            <div
+        ) : (
+          <>
+            <section
               style={{
                 ...styles.hero,
                 ...responsive.hero,
                 backgroundImage: event.cover_url
-                  ? `linear-gradient(rgba(35,40,58,.25), rgba(35,40,58,.35)), url(${event.cover_url})`
-                  : "linear-gradient(135deg, #9e8f90 0%, #ead6d6 100%)",
+                  ? `linear-gradient(rgba(19,24,42,.42), rgba(19,24,42,.58)), url(${event.cover_url})`
+                  : "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
                 backgroundSize: "cover",
                 backgroundPosition: "center",
               }}
             >
               <div
                 style={{
-                  ...styles.heroTopRow,
-                  ...responsive.heroTopRow,
+                  ...styles.heroTop,
+                  ...responsive.heroTop,
                 }}
               >
                 <div style={styles.heroBadge}>
-                  {event.is_upload_open ? "Evento ativo" : "Upload fechado"}
+                  <Sparkles size={14} />
+                  Detalhes premium do evento
                 </div>
 
-                <div style={styles.heroTopRight}>
+                <div style={styles.heroPills}>
                   <span style={styles.heroMiniTag}>
-                    Acesso {isAdmin ? "admin" : "parceiro"}
+                    {event.is_upload_open ? "Upload aberto" : "Upload fechado"}
+                  </span>
+
+                  <span style={styles.heroMiniTag}>
+                    {settings?.gallery_mode === "public"
+                      ? "Galeria pública"
+                      : "Galeria privada"}
                   </span>
                 </div>
               </div>
@@ -431,7 +372,7 @@ export default function MeuEventoDetalhe() {
                   ...responsive.heroTitle,
                 }}
               >
-                {event.name}
+                {event.name || "Evento sem nome"}
               </h1>
 
               <p
@@ -442,283 +383,99 @@ export default function MeuEventoDetalhe() {
               >
                 {event.description || "Sem descrição cadastrada para este evento."}
               </p>
-            </div>
+            </section>
 
-            <div
+            <section
               style={{
-                ...styles.bodyGrid,
-                ...responsive.bodyGrid,
+                ...styles.contentGrid,
+                ...responsive.contentGrid,
               }}
             >
               <div style={styles.leftColumn}>
-                <div style={styles.sectionTitle}>Resumo do evento</div>
+                <div style={styles.panelCard}>
+                  <div style={styles.panelHeader}>
+                    <p style={styles.kicker}>Resumo</p>
+                    <h2 style={styles.panelTitle}>Informações do evento</h2>
+                  </div>
 
-                <div
-                  style={{
-                    ...styles.infoGrid,
-                    ...responsive.infoGrid,
-                  }}
-                >
-                  <InfoBox label="Slug" value={event.slug} />
-                  <InfoBox label="Acesso" value={accessLabel} />
-                  <InfoBox label="Data do evento" value={formatDate(event.event_date)} />
-                  <InfoBox
-                    label="Upload"
-                    value={event.is_upload_open ? "aberto" : "fechado"}
-                  />
-                  <InfoBox
-                    label="Modo da galeria"
-                    value={settings?.gallery_mode || "—"}
-                  />
-                  <InfoBox
-                    label="Vídeos"
-                    value={settings?.allow_videos ? "permitidos" : "não"}
-                  />
-                </div>
-
-                <LinkCard
-                  title="Link público de upload"
-                  url={urls.uploadUrl}
-                  copyLabel={copiedKey === "upload" ? "Copiado!" : "Copiar link"}
-                  onCopy={() => copyText(urls.uploadUrl, "upload")}
-                  openLabel="Abrir página"
-                  isMobile={isMobile}
-                />
-
-                <LinkCard
-                  title="Galeria privada"
-                  url={urls.privateGalleryUrl}
-                  copyLabel={
-                    copiedKey === "private" ? "Copiado!" : "Copiar galeria privada"
-                  }
-                  onCopy={() => copyText(urls.privateGalleryUrl, "private")}
-                  openLabel="Ver galeria"
-                  isMobile={isMobile}
-                />
-
-                <LinkCard
-                  title="Galeria pública"
-                  url={urls.publicGalleryUrl}
-                  copyLabel={
-                    copiedKey === "public" ? "Copiado!" : "Copiar galeria pública"
-                  }
-                  onCopy={() => copyText(urls.publicGalleryUrl, "public")}
-                  openLabel="Abrir pública"
-                  isMobile={isMobile}
-                />
-                {isAdmin && (
-  <div style={styles.sectionBlock}>
-    <div style={styles.sectionTitle}>Utilidades do evento</div>
-
-    <div style={styles.linkCard}>
-      <p style={styles.helperText}>
-        Ferramentas rápidas para gerenciar este evento.
-      </p>
-
-      <div style={styles.linkActions}>
-        <Link
-          to={`/evento/${event.slug}/configuracoes`}
-          style={{
-            ...styles.darkButtonSmall,
-            ...(isMobile ? styles.mobileActionButton : {}),
-          }}
-        >
-          ⚙️ Configurações do evento
-        </Link>
-
-        <a
-          href={urls.publicGalleryUrl}
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            ...styles.lightButtonSmall,
-            ...(isMobile ? styles.mobileActionButton : {}),
-          }}
-        >
-          🌐 Abrir galeria pública
-        </a>
-
-        <a
-          href={urls.uploadUrl}
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            ...styles.lightButtonSmall,
-            ...(isMobile ? styles.mobileActionButton : {}),
-          }}
-        >
-          📤 Abrir página de upload
-        </a>
-      </div>
-    </div>
-  </div>
-)}
-                <div style={styles.sectionBlock}>
-                  <div style={styles.sectionTitle}>Filme automático da festa</div>
-
-                  <div style={styles.linkCard}>
-                    <p style={styles.helperText}>
-                      Gere um highlight automático com as mídias aprovadas do evento.
-                    </p>
-
-                    <div style={styles.filmFormGrid}>
-                      <label style={styles.field}>
-                        <span style={styles.infoLabel}>Título do filme</span>
-                        <input
-                          type="text"
-                          value={filmForm.title}
-                          onChange={(e) =>
-                            setFilmForm((prev) => ({
-                              ...prev,
-                              title: e.target.value,
-                            }))
-                          }
-                          style={styles.input}
-                          placeholder={`Filme de ${event?.name || "Evento"}`}
-                        />
-                      </label>
-
-                      <label style={styles.field}>
-                        <span style={styles.infoLabel}>Duração</span>
-                        <select
-                          value={filmForm.duration_seconds}
-                          onChange={(e) =>
-                            setFilmForm((prev) => ({
-                              ...prev,
-                              duration_seconds: Number(e.target.value),
-                            }))
-                          }
-                          style={styles.input}
-                        >
-                          <option value={30}>30 segundos</option>
-                          <option value={60}>60 segundos</option>
-                        </select>
-                      </label>
-
-                      <label style={styles.field}>
-                        <span style={styles.infoLabel}>Formato</span>
-                        <select
-                          value={filmForm.format}
-                          onChange={(e) =>
-                            setFilmForm((prev) => ({
-                              ...prev,
-                              format: e.target.value,
-                            }))
-                          }
-                          style={styles.input}
-                        >
-                          <option value="landscape">Horizontal</option>
-                          <option value="portrait">Vertical</option>
-                        </select>
-                      </label>
-
-                      <label style={styles.field}>
-                        <span style={styles.infoLabel}>Estilo</span>
-                        <select
-                          value={filmForm.style}
-                          onChange={(e) =>
-                            setFilmForm((prev) => ({
-                              ...prev,
-                              style: e.target.value,
-                            }))
-                          }
-                          style={styles.input}
-                        >
-                          <option value="romantic">Romântico</option>
-                          <option value="elegant">Elegante</option>
-                          <option value="party">Animado</option>
-                        </select>
-                      </label>
-                    </div>
-
-                    <div style={styles.linkActions}>
-                      <button
-                        type="button"
-                        style={{
-                          ...styles.darkButtonSmall,
-                          ...(isMobile ? styles.mobileActionButton : {}),
-                        }}
-                        onClick={handleGenerateFilm}
-                        disabled={creatingFilm}
-                      >
-                        {creatingFilm ? "Gerando..." : "Gerar filme"}
-                      </button>
-
-                      <button
-                        type="button"
-                        style={{
-                          ...styles.lightButtonSmall,
-                          ...(isMobile ? styles.mobileActionButton : {}),
-                        }}
-                        onClick={() => loadFilms(event.id)}
-                        disabled={loadingFilms}
-                      >
-                        {loadingFilms ? "Atualizando..." : "Atualizar lista"}
-                      </button>
-                    </div>
+                  <div
+                    style={{
+                      ...styles.infoGrid,
+                      ...responsive.infoGrid,
+                    }}
+                  >
+                    <InfoBox label="Slug" value={event.slug} />
+                    <InfoBox
+                      label="Data do evento"
+                      value={formatDate(event.event_date)}
+                    />
+                    <InfoBox
+                      label="Upload"
+                      value={event.is_upload_open ? "Aberto" : "Fechado"}
+                    />
+                    <InfoBox
+                      label="Modo da galeria"
+                      value={
+                        settings?.gallery_mode === "public" ? "Pública" : "Privada"
+                      }
+                    />
+                    <InfoBox
+                      label="Vídeos"
+                      value={settings?.allow_videos ? "Permitidos" : "Bloqueados"}
+                    />
+                    <InfoBox
+                      label="Nome do convidado"
+                      value={
+                        settings?.require_guest_name ? "Obrigatório" : "Opcional"
+                      }
+                    />
                   </div>
                 </div>
 
-                <div style={styles.sectionBlock}>
-                  <div style={styles.sectionTitle}>Filmes gerados</div>
+                <div style={styles.panelCard}>
+                  <div style={styles.panelHeader}>
+                    <p style={styles.kicker}>Links</p>
+                    <h2 style={styles.panelTitle}>Acessos rápidos do evento</h2>
+                  </div>
 
-                  <div style={styles.linkCard}>
-                    {loadingFilms ? (
-                      <p style={styles.helperText}>Carregando filmes...</p>
-                    ) : films.length === 0 ? (
-                      <p style={styles.helperText}>Nenhum filme gerado ainda.</p>
-                    ) : (
-                      <div style={styles.filmList}>
-                        {films.map((film) => (
-                          <div key={film.id} style={styles.filmItem}>
-                            <div style={styles.filmInfo}>
-                              <strong style={styles.infoValue}>
-                                {film.title || "Filme sem título"}
-                              </strong>
+                  <div style={styles.linkCardsWrap}>
+                    <LinkCard
+                      title="Link público de upload"
+                      icon={<Link2 size={16} />}
+                      url={urls.uploadUrl}
+                      copyLabel={copiedKey === "upload" ? "Copiado!" : "Copiar link"}
+                      onCopy={() => copyText(urls.uploadUrl, "upload")}
+                      openLabel="Abrir página"
+                      isMobile={isMobile}
+                    />
 
-                              <div style={styles.filmMeta}>
-                                {film.duration_seconds}s • {film.format} • {film.style}
-                              </div>
+                    <LinkCard
+                      title="Galeria privada"
+                      icon={<ImageIcon size={16} />}
+                      url={urls.privateGalleryUrl}
+                      copyLabel={
+                        copiedKey === "private"
+                          ? "Copiado!"
+                          : "Copiar galeria privada"
+                      }
+                      onCopy={() => copyText(urls.privateGalleryUrl, "private")}
+                      openLabel="Ver galeria"
+                      isMobile={isMobile}
+                    />
 
-                              <div style={styles.filmMeta}>
-                                Status:{" "}
-                                <strong>{translateFilmStatus(film.status)}</strong>
-                              </div>
-
-                              <div style={styles.filmMeta}>
-                                Criado em: {formatDateTime(film.created_at)}
-                              </div>
-
-                              {film.error_message ? (
-                                <div style={styles.filmError}>
-                                  Erro: {film.error_message}
-                                </div>
-                              ) : null}
-                            </div>
-
-                            <div style={styles.filmActions}>
-                              {film.output_url ? (
-                                <a
-                                  href={film.output_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{
-                                    ...styles.lightButtonSmall,
-                                    ...(isMobile ? styles.mobileActionButton : {}),
-                                  }}
-                                >
-                                  Abrir filme
-                                </a>
-                              ) : (
-                                <span style={styles.statusBadge}>
-                                  {translateFilmStatus(film.status)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <LinkCard
+                      title="Galeria pública"
+                      icon={<Globe size={16} />}
+                      url={urls.publicGalleryUrl}
+                      copyLabel={
+                        copiedKey === "public"
+                          ? "Copiado!"
+                          : "Copiar galeria pública"
+                      }
+                      onCopy={() => copyText(urls.publicGalleryUrl, "public")}
+                      openLabel="Abrir pública"
+                      isMobile={isMobile}
+                    />
                   </div>
                 </div>
               </div>
@@ -746,36 +503,147 @@ export default function MeuEventoDetalhe() {
 
                   <p style={styles.qrText}>
                     Use esse QR Code nas mesas, convites ou materiais impressos para
-                    levar os convidados direto para o evento.
+                    levar os convidados direto para a página de envio do evento.
                   </p>
 
-                  <button
-                    type="button"
-                    style={{
-                      ...styles.darkButton,
-                      ...responsive.fullWidthAction,
-                    }}
-                    onClick={() => copyText(urls.qrTargetUrl, "qr")}
-                    disabled={!urls.qrTargetUrl}
-                  >
-                    {copiedKey === "qr" ? "Copiado!" : "Copiar link do QR"}
-                  </button>
+                  <div style={styles.qrButtons}>
+                    <button
+                      type="button"
+                      style={{
+                        ...styles.darkButton,
+                        ...responsive.fullWidthAction,
+                      }}
+                      onClick={() => copyText(urls.qrTargetUrl, "qr")}
+                      disabled={!urls.qrTargetUrl}
+                    >
+                      {copiedKey === "qr" ? "Copiado!" : "Copiar link do QR"}
+                    </button>
 
-                  <button
-                    type="button"
-                    style={{
-                      ...styles.lightButton,
-                      ...responsive.fullWidthAction,
-                    }}
-                    onClick={downloadQrCode}
-                    disabled={!urls.qrCodeUrl}
-                  >
-                    Baixar QR Code
-                  </button>
+                    <button
+                      type="button"
+                      style={{
+                        ...styles.lightButton,
+                        ...responsive.fullWidthAction,
+                      }}
+                      onClick={downloadQrCode}
+                      disabled={!urls.qrCodeUrl}
+                    >
+                      <Download size={16} />
+                      Baixar QR Code
+                    </button>
+                  </div>
                 </div>
+
+                <div style={styles.panelCard}>
+                  <div style={styles.panelHeader}>
+                    <p style={styles.kicker}>Atalhos</p>
+                    <h2 style={styles.panelTitle}>Ações rápidas</h2>
+                  </div>
+
+                  <div style={styles.quickActions}>
+                    <a
+                      href={urls.uploadUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={styles.primaryLinkButton}
+                    >
+                      <ExternalLink size={16} />
+                      Abrir upload
+                    </a>
+
+                    <a
+                      href={urls.privateGalleryUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={styles.secondaryLinkButton}
+                    >
+                      <ImageIcon size={16} />
+                      Galeria privada
+                    </a>
+
+                    <a
+                      href={urls.publicGalleryUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={styles.secondaryLinkButton}
+                    >
+                      <Globe size={16} />
+                      Galeria pública
+                    </a>
+
+                    <Link
+                      to={`/evento/${event.slug}/configuracoes`}
+                      style={styles.secondaryLinkButton}
+                    >
+                      <Settings size={16} />
+                      Configurações
+                    </Link>
+                  </div>
+                </div>
+
+                {partner ? (
+                  <div style={styles.partnerCard}>
+                    <div style={styles.partnerCardHeader}>
+                      {partner.avatar_url ? (
+                        <img
+                          src={partner.avatar_url}
+                          alt={
+                            partner.studio_name ||
+                            partner.name ||
+                            "Fotógrafo parceiro"
+                          }
+                          style={styles.partnerAvatarImage}
+                        />
+                      ) : (
+                        <div style={styles.partnerAvatar}>
+                          <UserCircle2 size={28} />
+                        </div>
+                      )}
+
+                      <div>
+                        <div style={styles.partnerCardTitle}>
+                          {partner.studio_name ||
+                            partner.name ||
+                            "Fotógrafo parceiro"}
+                        </div>
+                        <div style={styles.partnerCardSub}>
+                          Gestão do evento e atendimento
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={styles.partnerActions}>
+                      {partner.instagram ? (
+                        <a
+                          href={normalizeInstagram(partner.instagram)}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={styles.partnerActionButton}
+                        >
+                          <Instagram size={15} />
+                          Instagram
+                        </a>
+                      ) : null}
+
+                      {partner.whatsapp || partner.phone ? (
+                        <a
+                          href={normalizeWhatsapp(
+                            partner.whatsapp || partner.phone
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={styles.partnerActionButton}
+                        >
+                          <MessageCircle size={15} />
+                          WhatsApp
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            </div>
-          </div>
+            </section>
+          </>
         )}
       </div>
     </div>
@@ -791,22 +659,31 @@ function InfoBox({ label, value }) {
   );
 }
 
-function LinkCard({ title, url, copyLabel, onCopy, openLabel, isMobile }) {
+function LinkCard({
+  title,
+  icon,
+  url,
+  copyLabel,
+  onCopy,
+  openLabel,
+  isMobile,
+}) {
   return (
     <div style={styles.linkCard}>
-      <div style={styles.linkCardTitle}>{title}</div>
-      <div style={styles.linkUrl}>{url || "Link não disponível."}</div>
+      <div style={styles.linkCardTitle}>
+        <span style={styles.linkIcon}>{icon}</span>
+        <strong>{title}</strong>
+      </div>
 
-      <div style={styles.linkActions}>
-        <button
-          type="button"
-          style={{
-            ...styles.darkButtonSmall,
-            ...(isMobile ? styles.mobileActionButton : {}),
-          }}
-          onClick={onCopy}
-          disabled={!url}
-        >
+      <div style={styles.linkUrl}>{url || "—"}</div>
+
+      <div
+        style={{
+          ...styles.linkActions,
+          ...(isMobile ? styles.linkActionsMobile : {}),
+        }}
+      >
+        <button type="button" onClick={onCopy} style={styles.lightButton}>
           {copyLabel}
         </button>
 
@@ -814,13 +691,9 @@ function LinkCard({ title, url, copyLabel, onCopy, openLabel, isMobile }) {
           href={url || "#"}
           target="_blank"
           rel="noreferrer"
-          style={{
-            ...styles.lightButtonSmall,
-            ...(isMobile ? styles.mobileActionButton : {}),
-            pointerEvents: url ? "auto" : "none",
-            opacity: url ? 1 : 0.55,
-          }}
+          style={styles.secondaryLinkButton}
         >
+          <ExternalLink size={16} />
           {openLabel}
         </a>
       </div>
@@ -836,21 +709,25 @@ function getResponsiveStyles(screenWidth) {
   if (isMobile) {
     return {
       container: {
-        maxWidth: "100%",
+        padding: "16px",
       },
       topBar: {
+        flexDirection: "column",
         alignItems: "stretch",
       },
       backLink: {
         width: "100%",
+        justifyContent: "center",
       },
       partnerChip: {
         width: "100%",
+        justifyContent: "space-between",
       },
       hero: {
-        padding: "20px 16px 18px",
+        padding: "22px",
+        borderRadius: "24px",
       },
-      heroTopRow: {
+      heroTop: {
         flexDirection: "column",
         alignItems: "flex-start",
       },
@@ -860,16 +737,14 @@ function getResponsiveStyles(screenWidth) {
       heroDescription: {
         fontSize: "14px",
       },
-      bodyGrid: {
+      contentGrid: {
         gridTemplateColumns: "1fr",
-        padding: "16px",
-        gap: "16px",
       },
       infoGrid: {
         gridTemplateColumns: "1fr",
       },
       qrImageWrap: {
-        maxWidth: "220px",
+        minHeight: "220px",
       },
       fullWidthAction: {
         width: "100%",
@@ -880,27 +755,18 @@ function getResponsiveStyles(screenWidth) {
   if (isTablet) {
     return {
       container: {
-        maxWidth: "100%",
-      },
-      hero: {
-        padding: "24px 20px 22px",
-      },
-      heroTitle: {
-        fontSize: "32px",
-      },
-      bodyGrid: {
-        gridTemplateColumns: "1fr",
         padding: "20px",
+      },
+      contentGrid: {
+        gridTemplateColumns: "1fr",
       },
       infoGrid: {
         gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
       },
-      qrImageWrap: {
-        maxWidth: "240px",
+      heroTitle: {
+        fontSize: "34px",
       },
-      fullWidthAction: {
-        width: "100%",
-      },
+      fullWidthAction: {},
     };
   }
 
@@ -910,10 +776,10 @@ function getResponsiveStyles(screenWidth) {
     backLink: {},
     partnerChip: {},
     hero: {},
-    heroTopRow: {},
+    heroTop: {},
     heroTitle: {},
     heroDescription: {},
-    bodyGrid: {},
+    contentGrid: {},
     infoGrid: {},
     qrImageWrap: {},
     fullWidthAction: {},
@@ -923,376 +789,431 @@ function getResponsiveStyles(screenWidth) {
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#f4f5f9",
-    padding: "32px 14px",
+    background:
+      "radial-gradient(circle at top left, rgba(240,210,170,0.18), transparent 25%), radial-gradient(circle at bottom right, rgba(176,137,104,0.16), transparent 22%), linear-gradient(180deg, #f7f5f2 0%, #f3eee7 100%)",
+    position: "relative",
+    overflow: "hidden",
+  },
+  glowOne: {
+    position: "absolute",
+    top: "-120px",
+    right: "-120px",
+    width: "320px",
+    height: "320px",
+    borderRadius: "50%",
+    background: "rgba(176,137,104,0.14)",
+    filter: "blur(60px)",
+    pointerEvents: "none",
+  },
+  glowTwo: {
+    position: "absolute",
+    bottom: "-100px",
+    left: "-90px",
+    width: "300px",
+    height: "300px",
+    borderRadius: "50%",
+    background: "rgba(30,36,64,0.08)",
+    filter: "blur(70px)",
+    pointerEvents: "none",
   },
   container: {
+    position: "relative",
+    zIndex: 1,
     width: "100%",
-    maxWidth: "1200px",
+    maxWidth: "1400px",
     margin: "0 auto",
+    padding: "28px",
   },
   topBar: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: "12px",
-    flexWrap: "wrap",
+    gap: "14px",
     marginBottom: "18px",
   },
   backLink: {
+    minHeight: "44px",
+    padding: "10px 16px",
+    borderRadius: "14px",
+    background: "rgba(255,255,255,0.82)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    color: "#1f2333",
     textDecoration: "none",
-    color: "#29314d",
     fontWeight: 700,
-    fontSize: "14px",
-    wordBreak: "break-word",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    boxShadow: "0 10px 24px rgba(24,32,79,0.06)",
   },
   partnerChip: {
-    background: "#fff",
-    border: "1px solid #e7e9f2",
+    minHeight: "44px",
+    padding: "10px 16px",
     borderRadius: "14px",
-    padding: "10px 14px",
-    boxShadow: "0 10px 25px rgba(24, 32, 79, 0.06)",
-    minWidth: 0,
+    background: "rgba(255,255,255,0.82)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    color: "#1f2333",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "10px",
+    flexWrap: "wrap",
+    boxShadow: "0 10px 24px rgba(24,32,79,0.06)",
   },
   partnerChipLabel: {
-    display: "block",
-    fontSize: "11px",
-    color: "#8a90a3",
-    marginBottom: "4px",
+    fontSize: "12px",
+    fontWeight: 800,
+    color: "#b08968",
+    textTransform: "uppercase",
+    letterSpacing: ".08em",
   },
   partnerChipName: {
-    wordBreak: "break-word",
+    fontSize: "14px",
+    color: "#1f2333",
   },
   stateBox: {
-    background: "#fff",
-    border: "1px solid #e9ebf3",
-    borderRadius: "20px",
+    background: "rgba(255,255,255,0.84)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    borderRadius: "24px",
     padding: "24px",
-    color: "#2f3445",
+    boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
   },
   stateBoxError: {
-    background: "#fff1f1",
-    border: "1px solid #ffd6d6",
-    borderRadius: "20px",
+    background: "#fff4e8",
+    border: "1px solid #efd7b5",
+    borderRadius: "24px",
     padding: "24px",
-    color: "#9b2e2e",
+    boxShadow: "0 14px 36px rgba(138,90,0,0.06)",
   },
-  contentCard: {
-    background: "#fcfcfe",
-    borderRadius: "28px",
-    border: "1px solid #e8eaf3",
-    overflow: "hidden",
-    boxShadow: "0 18px 38px rgba(24, 32, 79, 0.08)",
+  stateText: {
+    margin: 0,
+    color: "#4f566b",
+    fontSize: "15px",
+    lineHeight: 1.6,
   },
   hero: {
-    position: "relative",
-    padding: "28px 24px 24px",
+    borderRadius: "30px",
+    padding: "30px",
     color: "#fff",
+    boxShadow: "0 18px 50px rgba(30,36,64,0.18)",
+    marginBottom: "22px",
   },
-  heroTopRow: {
+  heroTop: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: "12px",
+    alignItems: "center",
+    gap: "16px",
     flexWrap: "wrap",
+    marginBottom: "18px",
   },
   heroBadge: {
     display: "inline-flex",
     alignItems: "center",
-    justifyContent: "center",
-    minHeight: "28px",
-    padding: "0 12px",
+    gap: "8px",
     borderRadius: "999px",
-    background: "rgba(28, 32, 56, 0.55)",
-    fontSize: "12px",
+    padding: "8px 14px",
+    background: "rgba(255,255,255,0.12)",
+    color: "#f1d9b0",
     fontWeight: 700,
+    fontSize: "12px",
   },
-  heroTopRight: {
+  heroPills: {
     display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
+    gap: "10px",
+    flexWrap: "wrap",
   },
   heroMiniTag: {
+    minHeight: "30px",
+    padding: "6px 12px",
+    borderRadius: "999px",
+    background: "rgba(255,255,255,0.14)",
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: "12px",
     display: "inline-flex",
     alignItems: "center",
-    minHeight: "30px",
-    padding: "0 12px",
-    borderRadius: "999px",
-    background: "rgba(255,255,255,0.28)",
-    fontSize: "12px",
-    fontWeight: 700,
   },
   heroTitle: {
-    margin: "18px 0 10px",
-    fontSize: "36px",
-    lineHeight: 1.1,
-    color: "#fff",
-    wordBreak: "break-word",
+    margin: "0 0 12px",
+    fontSize: "40px",
+    lineHeight: 1.08,
+    maxWidth: "900px",
   },
   heroDescription: {
     margin: 0,
-    maxWidth: "760px",
+    color: "rgba(255,255,255,0.84)",
     fontSize: "15px",
-    lineHeight: 1.5,
-    color: "rgba(255,255,255,0.96)",
-    wordBreak: "break-word",
+    lineHeight: 1.7,
+    maxWidth: "780px",
   },
-  bodyGrid: {
+  contentGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 2fr) minmax(290px, 360px)",
-    gap: "22px",
-    padding: "22px",
+    gridTemplateColumns: "minmax(0, 1.2fr) minmax(340px, 0.8fr)",
+    gap: "20px",
+    alignItems: "start",
   },
   leftColumn: {
-    minWidth: 0,
+    display: "grid",
+    gap: "20px",
   },
   rightColumn: {
-    minWidth: 0,
+    display: "grid",
+    gap: "20px",
   },
-  sectionTitle: {
-    fontSize: "14px",
-    fontWeight: 700,
-    color: "#b68628",
-    marginBottom: "14px",
+  panelCard: {
+    background: "rgba(255,255,255,0.82)",
+    backdropFilter: "blur(14px)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    borderRadius: "28px",
+    padding: "22px",
+    boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
   },
-  sectionBlock: {
-    marginTop: "18px",
+  panelHeader: {
+    marginBottom: "16px",
+  },
+  kicker: {
+    margin: 0,
+    color: "#b08968",
+    fontWeight: 800,
+    fontSize: "12px",
+    letterSpacing: ".08em",
+    textTransform: "uppercase",
+  },
+  panelTitle: {
+    margin: "8px 0 0",
+    fontSize: "24px",
+    color: "#1f2333",
   },
   infoGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: "12px",
-    marginBottom: "16px",
   },
   infoBox: {
-    background: "#f5f6fb",
-    border: "1px solid #e6e9f3",
-    borderRadius: "14px",
-    padding: "14px",
-    minWidth: 0,
+    background: "#f8f6f2",
+    border: "1px solid #eee9e1",
+    borderRadius: "16px",
+    padding: "12px 14px",
   },
   infoLabel: {
     display: "block",
     fontSize: "11px",
-    color: "#8e94a6",
-    marginBottom: "5px",
+    color: "#8a90a3",
     textTransform: "uppercase",
-    letterSpacing: ".04em",
+    letterSpacing: ".06em",
+    marginBottom: "5px",
   },
   infoValue: {
     color: "#23283a",
     fontSize: "14px",
     wordBreak: "break-word",
   },
+  linkCardsWrap: {
+    display: "grid",
+    gap: "12px",
+  },
   linkCard: {
-    background: "#f8f9fd",
-    border: "1px solid #e6e9f3",
+    background: "#f8f6f2",
+    border: "1px solid #eee9e1",
     borderRadius: "18px",
-    padding: "16px",
-    marginBottom: "14px",
-    minWidth: 0,
+    padding: "14px",
   },
   linkCardTitle: {
-    fontSize: "14px",
-    fontWeight: 700,
-    color: "#b68628",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
     marginBottom: "10px",
+    color: "#1f2333",
+    flexWrap: "wrap",
+  },
+  linkIcon: {
+    display: "inline-flex",
+    color: "#b08968",
   },
   linkUrl: {
-    fontSize: "13px",
-    color: "#48506a",
     background: "#fff",
-    border: "1px solid #e7eaf2",
-    borderRadius: "12px",
+    border: "1px solid #ece8e0",
+    borderRadius: "14px",
     padding: "10px 12px",
-    wordBreak: "break-word",
-    marginBottom: "12px",
-  },
-  helperText: {
-    margin: "0 0 14px",
-    color: "#5f667d",
     fontSize: "13px",
-    lineHeight: 1.5,
+    color: "#49516a",
+    wordBreak: "break-word",
+    marginBottom: "10px",
   },
   linkActions: {
     display: "flex",
     gap: "10px",
     flexWrap: "wrap",
   },
-  qrCard: {
-    background: "#f8f9fd",
-    border: "1px solid #e6e9f3",
-    borderRadius: "22px",
-    padding: "18px",
-    display: "flex",
+  linkActionsMobile: {
     flexDirection: "column",
-    alignItems: "center",
-    height: "100%",
+  },
+  qrCard: {
+    background: "rgba(255,255,255,0.82)",
+    backdropFilter: "blur(14px)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    borderRadius: "28px",
+    padding: "22px",
+    boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
   },
   qrTitle: {
-    alignSelf: "stretch",
-    fontSize: "14px",
-    fontWeight: 700,
-    color: "#b68628",
-    marginBottom: "14px",
-    textAlign: "center",
-    background: "#f0e4a8",
-    borderRadius: "999px",
-    padding: "10px 12px",
+    fontSize: "24px",
+    fontWeight: 800,
+    color: "#1f2333",
+    marginBottom: "16px",
   },
   qrImageWrap: {
-    width: "100%",
-    maxWidth: "200px",
-    aspectRatio: "1 / 1",
     background: "#fff",
-    borderRadius: "18px",
-    border: "1px solid #e4e8f1",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "12px",
-    marginBottom: "14px",
+    border: "1px solid #ece8e0",
+    borderRadius: "20px",
+    minHeight: "260px",
+    display: "grid",
+    placeItems: "center",
+    padding: "14px",
+    marginBottom: "12px",
   },
   qrImage: {
     width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    borderRadius: "10px",
+    maxWidth: "230px",
+    height: "auto",
+    display: "block",
   },
   qrPlaceholder: {
-    color: "#8d92a3",
+    color: "#7a8091",
     fontSize: "14px",
-    textAlign: "center",
   },
   qrText: {
-    margin: "0 0 16px",
-    textAlign: "center",
-    color: "#5f667d",
-    fontSize: "13px",
-    lineHeight: 1.5,
+    margin: "0 0 14px",
+    color: "#6f768b",
+    fontSize: "14px",
+    lineHeight: 1.7,
+  },
+  qrButtons: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
   },
   darkButton: {
-    width: "100%",
     minHeight: "44px",
     border: "none",
-    borderRadius: "12px",
-    background: "#1e2440",
+    borderRadius: "14px",
+    background: "linear-gradient(135deg, #1e2440 0%, #33406b 100%)",
     color: "#fff",
-    fontWeight: 700,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    fontWeight: 800,
+    padding: "10px 16px",
     cursor: "pointer",
-    marginBottom: "10px",
-    padding: "10px 14px",
+    boxShadow: "0 12px 24px rgba(30,36,64,0.16)",
   },
   lightButton: {
-    width: "100%",
-    minHeight: "44px",
-    border: "1px solid #dbe0ea",
-    borderRadius: "12px",
-    background: "#fff",
-    color: "#6b7390",
-    fontWeight: 700,
-    cursor: "pointer",
-    padding: "10px 14px",
-  },
-  darkButtonSmall: {
     minHeight: "42px",
-    border: "none",
-    borderRadius: "12px",
-    background: "#1e2440",
-    color: "#fff",
-    fontWeight: 700,
-    cursor: "pointer",
-    padding: "10px 14px",
-    textDecoration: "none",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  lightButtonSmall: {
-    minHeight: "42px",
-    border: "1px solid #dbe0ea",
-    borderRadius: "12px",
-    background: "#fff",
-    color: "#6b7390",
-    fontWeight: 700,
-    cursor: "pointer",
-    padding: "10px 14px",
-    textDecoration: "none",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  mobileActionButton: {
-    width: "100%",
-  },
-  filmFormGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: "12px",
-    marginBottom: "14px",
-  },
-  field: {
-    display: "grid",
-    gap: "6px",
-  },
-  input: {
-    width: "100%",
-    minHeight: "44px",
-    borderRadius: "12px",
-    border: "1px solid #dbe0ea",
-    background: "#fff",
-    color: "#23283a",
-    padding: "10px 12px",
-    fontSize: "14px",
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  filmList: {
-    display: "grid",
-    gap: "12px",
-  },
-  filmItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: "12px",
-    flexWrap: "wrap",
-    border: "1px solid #e6e9f3",
-    background: "#fff",
+    border: "1px solid #e1ddd6",
     borderRadius: "14px",
-    padding: "14px",
-  },
-  filmInfo: {
-    flex: 1,
-    minWidth: "220px",
-  },
-  filmMeta: {
-    fontSize: "13px",
-    color: "#687086",
-    marginTop: "4px",
-    wordBreak: "break-word",
-  },
-  filmError: {
-    marginTop: "6px",
-    fontSize: "13px",
-    color: "#b42318",
-    wordBreak: "break-word",
-  },
-  filmActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-  },
-  statusBadge: {
+    background: "#fff",
+    color: "#29314d",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: "38px",
-    padding: "0 12px",
-    borderRadius: "999px",
-    background: "#eef2ff",
-    color: "#344054",
+    gap: "8px",
+    cursor: "pointer",
     fontWeight: 700,
+    padding: "10px 14px",
+    textDecoration: "none",
+  },
+  quickActions: {
+    display: "grid",
+    gap: "12px",
+  },
+  primaryLinkButton: {
+    minHeight: "44px",
+    border: "none",
+    borderRadius: "14px",
+    background: "linear-gradient(135deg, #1e2440 0%, #33406b 100%)",
+    color: "#fff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    textDecoration: "none",
+    fontWeight: 800,
+    padding: "10px 16px",
+    boxShadow: "0 12px 24px rgba(30,36,64,0.16)",
+  },
+  secondaryLinkButton: {
+    minHeight: "42px",
+    border: "1px solid #e1ddd6",
+    borderRadius: "14px",
+    background: "#fff",
+    color: "#29314d",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    textDecoration: "none",
+    fontWeight: 700,
+    padding: "10px 14px",
+  },
+  partnerCard: {
+    background: "rgba(255,255,255,0.82)",
+    backdropFilter: "blur(14px)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    borderRadius: "28px",
+    padding: "22px",
+    boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
+  },
+  partnerCardHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    marginBottom: "16px",
+  },
+  partnerAvatarImage: {
+    width: "64px",
+    height: "64px",
+    borderRadius: "50%",
+    objectFit: "cover",
+    border: "3px solid rgba(255,255,255,0.9)",
+    boxShadow: "0 10px 22px rgba(24,32,79,0.12)",
+  },
+  partnerAvatar: {
+    width: "64px",
+    height: "64px",
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    background: "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
+    color: "#fff",
+    boxShadow: "0 10px 22px rgba(24,32,79,0.12)",
+  },
+  partnerCardTitle: {
+    fontSize: "18px",
+    fontWeight: 800,
+    color: "#1f2333",
+    lineHeight: 1.2,
+  },
+  partnerCardSub: {
+    marginTop: "4px",
     fontSize: "13px",
+    color: "#6f768b",
+  },
+  partnerActions: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+  partnerActionButton: {
+    minHeight: "40px",
+    borderRadius: "14px",
+    border: "1px solid #e1ddd6",
+    background: "#fff",
+    color: "#29314d",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    textDecoration: "none",
+    fontWeight: 700,
+    padding: "0 14px",
   },
 };

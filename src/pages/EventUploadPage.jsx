@@ -268,20 +268,19 @@ export default function EventUploadPage() {
     }
 
     const { error: insertError } = await supabase
-      .from("uploads")
-      .insert({
-        event_id: event.id,
-        file_path: storagePath,
-        file_url: null,
-        file_type: selectedCategory,
-        mime_type: selectedFile.type,
-        size_bytes: selectedFile.size,
-        duration_seconds: durationSeconds,
-        orientation: null,
-        status: settings?.gallery_mode === "approved_only" ? "pending" : "approved",
-        guest_name: guestName.trim() || null,
-      })
-
+  .from("uploads")
+  .insert({
+    event_id: event.id,
+    file_path: storagePath,
+    file_url: null,
+    file_type: selectedCategory,
+    mime_type: selectedFile.type,
+    size_bytes: selectedFile.size,
+    duration_seconds: durationSeconds,
+    orientation: null,
+    status: "pending",
+    guest_name: guestName.trim() || null,
+  })
     if (insertError) {
       setMessage(
         insertError.message || "Arquivo enviado, mas houve erro ao registrar no banco."

@@ -1,20 +1,42 @@
-import { useEffect, useState } from "react";
-import { Mail, Phone, NotebookPen, UserRoundPlus, Users, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Mail,
+  Phone,
+  NotebookPen,
+  UserRoundPlus,
+  Users,
+  ShieldCheck,
+  Camera,
+  Loader2,
+  Upload,
+  Pencil,
+  Power,
+  X,
+} from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
+const initialForm = {
+  studio_name: "",
+  email: "",
+  phone: "",
+  notes: "",
+  active: true,
+  avatar_url: "",
+};
+
 export default function PartnersPage() {
+  const avatarInputRef = useRef(null);
+
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [message, setMessage] = useState("");
 
-  const [form, setForm] = useState({
-    studio_name: "",
-    email: "",
-    phone: "",
-    notes: "",
-    active: true,
-  });
+  const [editingPartnerId, setEditingPartnerId] = useState(null);
+
+  const [form, setForm] = useState(initialForm);
+  const [avatarPreview, setAvatarPreview] = useState("");
 
   useEffect(() => {
     loadPartners();
@@ -47,6 +69,103 @@ export default function PartnersPage() {
     }));
   }
 
+  function resetForm() {
+    setEditingPartnerId(null);
+    setForm(initialForm);
+    setAvatarPreview("");
+    setMessage("");
+    if (avatarInputRef.current) {
+      avatarInputRef.current.value = "";
+    }
+  }
+
+  function startEdit(partner) {
+    setEditingPartnerId(partner.id);
+    setForm({
+      studio_name: partner.studio_name || "",
+      email: partner.email || "",
+      phone: partner.phone || "",
+      notes: partner.notes || "",
+      active: typeof partner.active === "boolean" ? partner.active : true,
+      avatar_url: partner.avatar_url || "",
+    });
+    setAvatarPreview(partner.avatar_url || "");
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function sanitizeFileName(name = "avatar") {
+    const parts = name.split(".");
+    const ext = parts.length > 1 ? parts.pop() : "jpg";
+    const base = parts
+      .join(".")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9-_]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase();
+
+    return `${base || "avatar"}.${ext.toLowerCase()}`;
+  }
+
+  async function handleAvatarChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setMessage("Selecione uma imagem válida.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage("A imagem deve ter no máximo 5MB.");
+      return;
+    }
+
+    try {
+      setAvatarUploading(true);
+      setMessage("");
+
+      const safeName = sanitizeFileName(file.name);
+      const targetFolder = editingPartnerId
+        ? `partners/${editingPartnerId}/avatar`
+        : `partners/temp`;
+
+      const filePath = `${targetFolder}/${Date.now()}-${safeName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("partner-assets")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: true,
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicData } = supabase.storage
+        .from("partner-assets")
+        .getPublicUrl(filePath);
+
+      const avatarUrl = publicData?.publicUrl || "";
+
+      setAvatarPreview(avatarUrl);
+      setForm((prev) => ({
+        ...prev,
+        avatar_url: avatarUrl,
+      }));
+    } catch (error) {
+      console.error("Erro ao enviar avatar:", error);
+      setMessage(error?.message || "Não foi possível enviar a foto.");
+    } finally {
+      setAvatarUploading(false);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = "";
+      }
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
 
@@ -69,26 +188,72 @@ export default function PartnersPage() {
       phone: form.phone.trim() || null,
       notes: form.notes.trim() || null,
       active: form.active,
+      avatar_url: form.avatar_url || null,
     };
 
-    const { error } = await supabase.from("partners").insert([payload]);
+    let error = null;
+
+    if (editingPartnerId) {
+      const response = await supabase
+        .from("partners")
+        .update(payload)
+        .eq("id", editingPartnerId);
+
+      error = response.error;
+    } else {
+      const response = await supabase.from("partners").insert([payload]);
+      error = response.error;
+    }
 
     if (error) {
       console.error(error);
       setMessage(error.message);
     } else {
-      setMessage("Parceiro cadastrado com sucesso.");
-      setForm({
-        studio_name: "",
-        email: "",
-        phone: "",
-        notes: "",
-        active: true,
-      });
+      setMessage(
+        editingPartnerId
+          ? "Parceiro atualizado com sucesso."
+          : "Parceiro cadastrado com sucesso."
+      );
+      resetForm();
       await loadPartners();
     }
 
     setSaving(false);
+  }
+
+  async function handleToggleActive(partner) {
+    const confirmText = partner.active
+      ? `Deseja desativar ${partner.studio_name}?`
+      : `Deseja reativar ${partner.studio_name}?`;
+
+    const confirmed = window.confirm(confirmText);
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("partners")
+      .update({ active: !partner.active })
+      .eq("id", partner.id);
+
+    if (error) {
+      console.error(error);
+      setMessage(error.message || "Não foi possível alterar o status do parceiro.");
+      return;
+    }
+
+    if (editingPartnerId === partner.id) {
+      setForm((prev) => ({
+        ...prev,
+        active: !partner.active,
+      }));
+    }
+
+    setMessage(
+      partner.active
+        ? "Parceiro desativado com sucesso."
+        : "Parceiro reativado com sucesso."
+    );
+
+    await loadPartners();
   }
 
   return (
@@ -113,8 +278,66 @@ export default function PartnersPage() {
               <UserRoundPlus size={18} />
             </div>
             <div>
-              <h2 style={styles.cardTitle}>Novo parceiro</h2>
-              <p style={styles.cardText}>Cadastre um fotógrafo parceiro no sistema.</p>
+              <h2 style={styles.cardTitle}>
+                {editingPartnerId ? "Editar parceiro" : "Novo parceiro"}
+              </h2>
+              <p style={styles.cardText}>
+                {editingPartnerId
+                  ? "Atualize os dados do fotógrafo parceiro."
+                  : "Cadastre um fotógrafo parceiro no sistema."}
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.avatarSection}>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarChange}
+              style={{ display: "none" }}
+            />
+
+            <div style={styles.avatarCard}>
+              <div style={styles.avatarPreviewWrap}>
+                {avatarPreview ? (
+                  <img
+                    src={avatarPreview}
+                    alt="Foto do fotógrafo"
+                    style={styles.avatarPreview}
+                  />
+                ) : (
+                  <div style={styles.avatarFallback}>
+                    <Camera size={30} />
+                  </div>
+                )}
+              </div>
+
+              <div style={styles.avatarInfo}>
+                <h3 style={styles.avatarTitle}>Foto do fotógrafo</h3>
+                <p style={styles.avatarText}>
+                  Essa foto poderá aparecer no painel, nos detalhes do evento e nas páginas públicas.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  style={styles.avatarButton}
+                  disabled={avatarUploading}
+                >
+                  {avatarUploading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      {avatarPreview ? "Trocar foto" : "Enviar foto"}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -190,9 +413,26 @@ export default function PartnersPage() {
               Parceiro ativo
             </label>
 
-            <button type="submit" style={styles.primaryButton} disabled={saving}>
-              {saving ? "Salvando..." : "Cadastrar parceiro"}
-            </button>
+            <div style={styles.formActions}>
+              <button type="submit" style={styles.primaryButton} disabled={saving}>
+                {saving
+                  ? "Salvando..."
+                  : editingPartnerId
+                  ? "Salvar alterações"
+                  : "Cadastrar parceiro"}
+              </button>
+
+              {editingPartnerId ? (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  style={styles.secondaryButton}
+                >
+                  <X size={16} />
+                  Cancelar edição
+                </button>
+              ) : null}
+            </div>
           </form>
         </section>
 
@@ -218,9 +458,23 @@ export default function PartnersPage() {
               {partners.map((partner) => (
                 <div key={partner.id} style={styles.partnerCard}>
                   <div style={styles.partnerTop}>
-                    <div>
-                      <strong style={styles.partnerName}>{partner.studio_name}</strong>
-                      <p style={styles.partnerEmail}>{partner.email || "Sem email"}</p>
+                    <div style={styles.partnerIdentity}>
+                      {partner.avatar_url ? (
+                        <img
+                          src={partner.avatar_url}
+                          alt={partner.studio_name}
+                          style={styles.partnerAvatar}
+                        />
+                      ) : (
+                        <div style={styles.partnerAvatarFallback}>
+                          <Camera size={18} />
+                        </div>
+                      )}
+
+                      <div>
+                        <strong style={styles.partnerName}>{partner.studio_name}</strong>
+                        <p style={styles.partnerEmail}>{partner.email || "Sem email"}</p>
+                      </div>
                     </div>
 
                     <span
@@ -247,6 +501,31 @@ export default function PartnersPage() {
                       <p style={styles.notesText}>{partner.notes}</p>
                     </div>
                   ) : null}
+
+                  <div style={styles.partnerActions}>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(partner)}
+                      style={styles.actionButton}
+                    >
+                      <Pencil size={15} />
+                      Editar
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleActive(partner)}
+                      style={{
+                        ...styles.actionButton,
+                        ...(partner.active
+                          ? styles.actionButtonWarn
+                          : styles.actionButtonSuccess),
+                      }}
+                    >
+                      <Power size={15} />
+                      {partner.active ? "Desativar" : "Reativar"}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -348,6 +627,70 @@ const styles = {
     fontSize: "14px",
     lineHeight: 1.5,
   },
+  avatarSection: {
+    marginBottom: "18px",
+  },
+  avatarCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: "18px",
+    flexWrap: "wrap",
+    background: "#fafbff",
+    border: "1px solid #ececf3",
+    borderRadius: "18px",
+    padding: "16px",
+  },
+  avatarPreviewWrap: {
+    flexShrink: 0,
+  },
+  avatarPreview: {
+    width: "96px",
+    height: "96px",
+    borderRadius: "50%",
+    objectFit: "cover",
+    border: "3px solid rgba(255,255,255,0.9)",
+    boxShadow: "0 10px 24px rgba(24,32,79,0.12)",
+  },
+  avatarFallback: {
+    width: "96px",
+    height: "96px",
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    background: "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
+    color: "#fff",
+    boxShadow: "0 10px 24px rgba(24,32,79,0.12)",
+  },
+  avatarInfo: {
+    flex: 1,
+    minWidth: "240px",
+  },
+  avatarTitle: {
+    margin: "0 0 6px",
+    fontSize: "18px",
+    fontWeight: 800,
+    color: "#1f2333",
+  },
+  avatarText: {
+    margin: "0 0 14px",
+    fontSize: "14px",
+    lineHeight: 1.6,
+    color: "#6f768b",
+  },
+  avatarButton: {
+    minHeight: "42px",
+    borderRadius: "14px",
+    border: "1px solid #e1ddd6",
+    background: "#fff",
+    color: "#29314d",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    cursor: "pointer",
+    fontWeight: 700,
+    padding: "10px 16px",
+  },
   form: {
     display: "grid",
     gap: "14px",
@@ -408,6 +751,12 @@ const styles = {
     color: "#42485c",
     fontWeight: 600,
   },
+  formActions: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+    marginTop: "4px",
+  },
   primaryButton: {
     height: "48px",
     border: "none",
@@ -416,7 +765,21 @@ const styles = {
     color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
-    marginTop: "4px",
+    padding: "0 18px",
+  },
+  secondaryButton: {
+    height: "48px",
+    border: "1px solid #dfe3ec",
+    borderRadius: "14px",
+    background: "#fff",
+    color: "#29314d",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    cursor: "pointer",
+    fontWeight: 700,
+    padding: "0 16px",
   },
   emptyText: {
     color: "#687086",
@@ -438,6 +801,32 @@ const styles = {
     alignItems: "flex-start",
     gap: "12px",
     marginBottom: "14px",
+  },
+  partnerIdentity: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    minWidth: 0,
+  },
+  partnerAvatar: {
+    width: "52px",
+    height: "52px",
+    borderRadius: "50%",
+    objectFit: "cover",
+    flexShrink: 0,
+    border: "2px solid #fff",
+    boxShadow: "0 8px 18px rgba(24,32,79,0.12)",
+  },
+  partnerAvatarFallback: {
+    width: "52px",
+    height: "52px",
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    background: "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
+    color: "#fff",
+    flexShrink: 0,
+    boxShadow: "0 8px 18px rgba(24,32,79,0.12)",
   },
   partnerName: {
     display: "block",
@@ -500,6 +889,7 @@ const styles = {
     border: "1px solid #e7eaf2",
     borderRadius: "12px",
     padding: "12px",
+    marginBottom: "12px",
   },
   notesLabel: {
     display: "block",
@@ -515,5 +905,34 @@ const styles = {
     fontSize: "14px",
     lineHeight: 1.5,
     whiteSpace: "pre-wrap",
+  },
+  partnerActions: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    minHeight: "40px",
+    borderRadius: "12px",
+    border: "1px solid #dfe3ec",
+    background: "#fff",
+    color: "#29314d",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    cursor: "pointer",
+    fontWeight: 700,
+    padding: "0 14px",
+  },
+  actionButtonWarn: {
+    border: "1px solid #f0d4d4",
+    color: "#9b2e2e",
+    background: "#fff7f7",
+  },
+  actionButtonSuccess: {
+    border: "1px solid #cfe8d5",
+    color: "#257a45",
+    background: "#f3fbf5",
   },
 };

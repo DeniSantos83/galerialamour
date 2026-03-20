@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import QRCode from "qrcode";
-import PanelLoader from "../components/PanelLoader";
 import {
   CalendarDays,
   Camera,
@@ -12,14 +11,16 @@ import {
   Image as ImageIcon,
   Link2,
   LogOut,
+  MessageCircle,
   QrCode,
   Settings,
-  UserCircle2,
+  Sparkles,
+  Video,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 const MOBILE_BREAKPOINT = 768;
-const TABLET_BREAKPOINT = 1024;
+const TABLET_BREAKPOINT = 1080;
 
 export default function MeusEventos() {
   const [authLoading, setAuthLoading] = useState(true);
@@ -27,6 +28,7 @@ export default function MeusEventos() {
 
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [partnerInfo, setPartnerInfo] = useState(null);
 
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -42,10 +44,8 @@ export default function MeusEventos() {
     typeof window !== "undefined" ? window.location.origin : "";
 
   const isMobile = screenWidth <= MOBILE_BREAKPOINT;
-  const isTablet = screenWidth > MOBILE_BREAKPOINT && screenWidth <= TABLET_BREAKPOINT;
-  const isDesktop = screenWidth > TABLET_BREAKPOINT;
-
-  const responsive = useMemo(() => getResponsiveStyles(screenWidth), [screenWidth]);
+  const isTablet =
+    screenWidth > MOBILE_BREAKPOINT && screenWidth <= TABLET_BREAKPOINT;
 
   const selectedLinks = useMemo(() => {
     if (!selectedEvent?.slug) {
@@ -67,13 +67,42 @@ export default function MeusEventos() {
     const total = events.length;
     const uploadsOpen = events.filter((event) => event.is_upload_open).length;
     const withDate = events.filter((event) => !!event.event_date).length;
+    const publicEvents = events.filter(
+      (event) => event.event_settings?.gallery_mode === "public"
+    ).length;
 
     return {
       total,
       uploadsOpen,
       withDate,
+      publicEvents,
     };
   }, [events]);
+
+  const photographer = useMemo(() => {
+    const name =
+      partnerInfo?.studio_name ||
+      profile?.studio_name ||
+      profile?.full_name ||
+      profile?.["full-name"] ||
+      "Fotógrafo parceiro";
+
+    const avatar =
+      partnerInfo?.avatar_url ||
+      profile?.avatar_url ||
+      profile?.photo_url ||
+      profile?.image_url ||
+      "";
+
+    const whatsapp = partnerInfo?.phone || "";
+
+    return {
+      name,
+      avatar,
+      whatsapp,
+      email: partnerInfo?.email || user?.email || "",
+    };
+  }, [partnerInfo, profile, user]);
 
   useEffect(() => {
     loadSession();
@@ -111,6 +140,7 @@ export default function MeusEventos() {
       if (!user) {
         setUser(null);
         setProfile(null);
+        setPartnerInfo(null);
         return;
       }
 
@@ -125,7 +155,6 @@ export default function MeusEventos() {
       if (profileError) throw profileError;
 
       setProfile(profileData || null);
-
       await loadEvents();
     } catch (error) {
       console.error("Erro ao carregar sessão:", error);
@@ -140,26 +169,32 @@ export default function MeusEventos() {
       setLoadingEvents(true);
 
       const { data: userData } = await supabase.auth.getUser();
-      const user = userData.user;
+      const authUser = userData.user;
 
-      if (!user) {
+      if (!authUser) {
         setEvents([]);
+        setPartnerInfo(null);
         return;
       }
 
       const { data: partner, error: partnerError } = await supabase
         .from("partners")
-        .select("id")
-        .eq("profile_id", user.id)
+        .select(
+          "id, profile_id, studio_name, phone, notes, active, created_at, email, avatar_url"
+        )
+        .eq("profile_id", authUser.id)
         .single();
 
       if (partnerError || !partner) {
-        console.error("Parceiro não encontrado");
+        console.error("Parceiro não encontrado", partnerError);
+        setPartnerInfo(null);
         setEvents([]);
         return;
       }
 
-      const { data: events, error } = await supabase
+      setPartnerInfo(partner);
+
+      const { data: eventsData, error } = await supabase
         .from("events")
         .select(`
           *,
@@ -170,7 +205,7 @@ export default function MeusEventos() {
 
       if (error) throw error;
 
-      const normalizedEvents = events || [];
+      const normalizedEvents = eventsData || [];
       setEvents(normalizedEvents);
 
       if (normalizedEvents.length > 0) {
@@ -246,15 +281,25 @@ export default function MeusEventos() {
     });
   }
 
-  if (authLoading || loadingEvents) {
-  return (
-    <PanelLoader
-      title="Carregando painel..."
-      subtitle="Aguarde enquanto buscamos seus eventos e acessos."
-      icon="camera"
-    />
-  );
-}
+  function normalizeWhatsapp(value) {
+    if (!value) return "";
+    const clean = value.replace(/\D/g, "");
+    return clean ? `https://wa.me/${clean}` : "";
+  }
+
+  if (authLoading) {
+    return (
+      <div style={styles.loadingScreen}>
+        <div style={styles.loadingCard}>
+          <div style={styles.logoBadge}>
+            <Camera size={24} />
+          </div>
+          <h2 style={styles.loadingTitle}>Carregando painel premium...</h2>
+          <p style={styles.loadingText}>Preparando seus eventos e acessos.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -264,117 +309,70 @@ export default function MeusEventos() {
     return <Navigate to="/painel" replace />;
   }
 
-  const partnerName =
-    profile?.studio_name ||
-    profile?.full_name ||
-    profile?.["full-name"] ||
-    user.email ||
-    "Fotógrafo parceiro";
-
   return (
     <div style={styles.page}>
-      <div style={styles.backgroundGlowTop} />
-      <div style={styles.backgroundGlowBottom} />
+      <div style={styles.glowOne} />
+      <div style={styles.glowTwo} />
 
       <header
         style={{
           ...styles.header,
-          ...responsive.header,
+          ...(isMobile ? styles.headerMobile : {}),
         }}
       >
-        <div
-          style={{
-            ...styles.headerLeft,
-            ...responsive.headerLeft,
-          }}
-        >
+        <div style={styles.headerBrand}>
           <div style={styles.brandIcon}>
             <Camera size={22} />
           </div>
-
           <div>
             <div style={styles.brandTitle}>L’Amour Galeria</div>
-            <div style={styles.brandSubtitle}>Painel do Fotógrafo</div>
+            <div style={styles.brandSubtitle}>Painel Premium do Fotógrafo</div>
           </div>
         </div>
 
-        <div
-          style={{
-            ...styles.headerRight,
-            ...responsive.headerRight,
-          }}
-        >
-          <div
-            style={{
-              ...styles.partnerBadge,
-              ...responsive.partnerBadge,
-            }}
-          >
-            <UserCircle2 size={18} />
-            <div style={styles.partnerBadgeText}>
-              <strong style={styles.partnerName}>{partnerName}</strong>
-              <span style={styles.partnerEmail}>{user.email}</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            style={{
-              ...styles.logoutButton,
-              ...responsive.fullWidthButtonMaybe,
-            }}
-          >
-            <LogOut size={16} />
-            Sair
-          </button>
-        </div>
+        <button type="button" onClick={handleLogout} style={styles.logoutButton}>
+          <LogOut size={16} />
+          Sair
+        </button>
       </header>
 
       <main
         style={{
           ...styles.main,
-          ...responsive.main,
+          ...(isMobile ? styles.mainMobile : {}),
         }}
       >
         {message ? <div style={styles.alert}>{message}</div> : null}
 
         <section
           style={{
-            ...styles.heroCard,
-            ...responsive.heroCard,
+            ...styles.hero,
+            ...(isMobile ? styles.heroMobile : {}),
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <p style={styles.kicker}>Área do Parceiro</p>
+          <div style={styles.heroContent}>
+            <div style={styles.heroBadge}>
+              <Sparkles size={14} />
+              Área exclusiva do fotógrafo
+            </div>
+
             <h1
               style={{
                 ...styles.heroTitle,
-                ...responsive.heroTitle,
+                ...(isMobile ? styles.heroTitleMobile : {}),
               }}
             >
-              Seus eventos em um só lugar
+              Seu estúdio com presença premium
             </h1>
-            <p
-              style={{
-                ...styles.heroSubtitle,
-                ...responsive.heroSubtitle,
-              }}
-            >
-              Acesse links, QR Code, galerias e configurações dos eventos
-              vinculados à sua conta.
+
+            <p style={styles.heroText}>
+              Gerencie eventos, compartilhe QR Codes, acompanhe galerias e entregue
+              uma experiência mais profissional para seus clientes.
             </p>
           </div>
 
           <div style={styles.heroActions}>
-            <button
-              type="button"
-              style={{
-                ...styles.refreshButton,
-                ...responsive.fullWidthButtonMaybe,
-              }}
-              onClick={() => loadEvents()}
-            >
+            <button type="button" onClick={loadEvents} style={styles.primaryButton}>
               Atualizar eventos
             </button>
           </div>
@@ -382,86 +380,82 @@ export default function MeusEventos() {
 
         <section
           style={{
-            ...styles.statsGrid,
-            ...responsive.statsGrid,
+            ...styles.dashboardGrid,
+            ...(isTablet || isMobile ? styles.dashboardGridMobile : {}),
           }}
         >
-          <div style={styles.statCard}>
-            <div style={styles.statIconWrap}>
-              <CalendarDays size={18} />
-            </div>
-            <div>
-              <div
-                style={{
-                  ...styles.statValue,
-                  ...responsive.statValue,
-                }}
-              >
-                {stats.total}
-              </div>
-              <div style={styles.statLabel}>Eventos vinculados</div>
-            </div>
-          </div>
+          <aside style={styles.sidebar}>
+            <div style={styles.profileCard}>
+              <div style={styles.profileTop}>
+                {photographer.avatar ? (
+                  <img
+                    src={photographer.avatar}
+                    alt={photographer.name}
+                    style={styles.avatar}
+                  />
+                ) : (
+                  <div style={styles.avatarFallback}>
+                    {photographer.name?.[0]?.toUpperCase() || "F"}
+                  </div>
+                )}
 
-          <div style={styles.statCard}>
-            <div style={styles.statIconWrap}>
-              <ImageIcon size={18} />
-            </div>
-            <div>
-              <div
-                style={{
-                  ...styles.statValue,
-                  ...responsive.statValue,
-                }}
-              >
-                {stats.uploadsOpen}
-              </div>
-              <div style={styles.statLabel}>Uploads abertos</div>
-            </div>
-          </div>
-
-          <div style={styles.statCard}>
-            <div style={styles.statIconWrap}>
-              <Globe size={18} />
-            </div>
-            <div>
-              <div
-                style={{
-                  ...styles.statValue,
-                  ...responsive.statValue,
-                }}
-              >
-                {stats.withDate}
-              </div>
-              <div style={styles.statLabel}>Com data definida</div>
-            </div>
-          </div>
-        </section>
-
-        <section
-          style={{
-            ...styles.contentGrid,
-            ...responsive.contentGrid,
-          }}
-        >
-          <div style={styles.leftColumn}>
-            <div style={styles.panelCard}>
-              <div style={styles.panelHeader}>
-                <div>
-                  <p style={styles.kicker}>Eventos</p>
-                  <h2
-                    style={{
-                      ...styles.panelTitle,
-                      ...responsive.panelTitle,
-                    }}
-                  >
-                    Minha lista de eventos
-                  </h2>
+                <div style={{ minWidth: 0 }}>
+                  <div style={styles.profileName}>{photographer.name}</div>
+                  <div style={styles.profileEmail}>{photographer.email}</div>
                 </div>
               </div>
 
+              <div style={styles.profileActions}>
+                {photographer.whatsapp ? (
+                  <a
+                    href={normalizeWhatsapp(photographer.whatsapp)}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={styles.profileActionButton}
+                  >
+                    <MessageCircle size={15} />
+                    WhatsApp
+                  </a>
+                ) : null}
+              </div>
+            </div>
+
+            <div
+              style={{
+                ...styles.statsGrid,
+                ...(isMobile ? styles.statsGridMobile : {}),
+              }}
+            >
+              <StatCard
+                icon={<CalendarDays size={18} />}
+                value={stats.total}
+                label="Eventos"
+              />
+              <StatCard
+                icon={<ImageIcon size={18} />}
+                value={stats.uploadsOpen}
+                label="Uploads abertos"
+              />
+              <StatCard
+                icon={<Globe size={18} />}
+                value={stats.publicEvents}
+                label="Galerias públicas"
+              />
+              <StatCard
+                icon={<Video size={18} />}
+                value={stats.withDate}
+                label="Com data"
+              />
+            </div>
+
+            <div style={styles.panelCard}>
+              <div style={styles.panelHeader}>
+                <p style={styles.kicker}>Meus eventos</p>
+                <h2 style={styles.panelTitle}>Lista do fotógrafo</h2>
+              </div>
+
               {loadingEvents && events.length === 0 ? (
-                <p style={styles.emptyText}>Carregando seus eventos...</p>
+                <p style={styles.emptyText}>Carregando eventos...</p>
               ) : events.length === 0 ? (
                 <p style={styles.emptyText}>
                   Nenhum evento vinculado à sua conta no momento.
@@ -481,42 +475,27 @@ export default function MeusEventos() {
                           ...(isActive ? styles.eventItemActive : {}),
                         }}
                       >
-                        <div style={styles.eventItemContent}>
-                          <div
+                        <div style={styles.eventItemTop}>
+                          <strong style={styles.eventName}>
+                            {event.name || "Evento sem nome"}
+                          </strong>
+
+                          <span
                             style={{
-                              ...styles.eventTopRow,
-                              ...responsive.eventTopRow,
+                              ...styles.statusBadge,
+                              ...(event.is_upload_open
+                                ? styles.statusOpen
+                                : styles.statusClosed),
                             }}
                           >
-                            <strong style={styles.eventName}>
-                              {event.name || "Evento sem nome"}
-                            </strong>
+                            {event.is_upload_open ? "Upload aberto" : "Fechado"}
+                          </span>
+                        </div>
 
-                            <span
-                              style={{
-                                ...styles.statusBadge,
-                                ...(event.is_upload_open
-                                  ? styles.statusOpen
-                                  : styles.statusClosed),
-                              }}
-                            >
-                              {event.is_upload_open
-                                ? "Upload aberto"
-                                : "Upload fechado"}
-                            </span>
-                          </div>
-
-                          <div style={styles.eventMeta}>
-                            <span>{event.slug || "sem-slug"}</span>
-                            <span>•</span>
-                            <span>{formatDate(event.event_date)}</span>
-                          </div>
-
-                          <div style={styles.eventDescription}>
-                            {event.description?.trim()
-                              ? event.description
-                              : "Sem descrição cadastrada para este evento."}
-                          </div>
+                        <div style={styles.eventMeta}>
+                          <span>{event.slug || "sem-slug"}</span>
+                          <span>•</span>
+                          <span>{formatDate(event.event_date)}</span>
                         </div>
                       </button>
                     );
@@ -524,224 +503,232 @@ export default function MeusEventos() {
                 </div>
               )}
             </div>
-          </div>
+          </aside>
 
-          <div style={styles.rightColumn}>
-            <div style={styles.panelCard}>
+          <section style={styles.mainPanel}>
+            <div style={styles.panelCardLarge}>
               <div style={styles.panelHeader}>
-                <div>
-                  <p style={styles.kicker}>Resumo</p>
-                  <h2
-                    style={{
-                      ...styles.panelTitle,
-                      ...responsive.panelTitle,
-                    }}
-                  >
-                    Evento selecionado
-                  </h2>
-                </div>
+                <p style={styles.kicker}>Evento selecionado</p>
+                <h2 style={styles.panelTitle}>
+                  {selectedEvent?.name || "Nenhum evento selecionado"}
+                </h2>
               </div>
 
               {!selectedEvent ? (
                 <p style={styles.emptyText}>
-                  Selecione um evento para visualizar seus links e QR Code.
-                </p>
-              ) : (
-                <>
-                  <InfoBox label="Evento" value={selectedEvent.name} />
-                  <InfoBox label="Slug" value={selectedEvent.slug} />
-                  <InfoBox
-                    label="Data"
-                    value={formatDate(selectedEvent.event_date)}
-                  />
-                  <InfoBox
-                    label="Parceiro"
-                    value={selectedEvent.partner_name || partnerName}
-                  />
-                  <InfoBox
-                    label="Modo da galeria"
-                    value={selectedEvent.event_settings?.gallery_mode || "private"}
-                  />
-                  <InfoBox
-                    label="Vídeos"
-                    value={
-                      selectedEvent.event_settings?.allow_videos
-                        ? "Permitidos"
-                        : "Bloqueados"
-                    }
-                  />
-                  <InfoBox
-                    label="Nome do convidado"
-                    value={
-                      selectedEvent.event_settings?.require_guest_name
-                        ? "Obrigatório"
-                        : "Opcional"
-                    }
-                  />
-                </>
-              )}
-            </div>
-
-            <div style={styles.panelCard}>
-              <div style={styles.panelHeader}>
-                <div>
-                  <p style={styles.kicker}>Acessos rápidos</p>
-                  <h2
-                    style={{
-                      ...styles.panelTitle,
-                      ...responsive.panelTitle,
-                    }}
-                  >
-                    Links do evento
-                  </h2>
-                </div>
-              </div>
-
-              {!selectedEvent ? (
-                <p style={styles.emptyText}>
-                  Selecione um evento para exibir os links.
-                </p>
-              ) : (
-                <>
-                  <LinkBox
-                    icon={<Link2 size={16} />}
-                    title="Link público de upload"
-                    url={selectedLinks.uploadUrl}
-                    onCopy={() => copyText(selectedLinks.uploadUrl, "upload")}
-                    copied={copiedKey === "upload"}
-                    isMobile={isMobile}
-                  />
-
-                  <LinkBox
-                    icon={<ExternalLink size={16} />}
-                    title="Galeria privada"
-                    url={selectedLinks.privateGalleryUrl}
-                    onCopy={() => copyText(selectedLinks.privateGalleryUrl, "private")}
-                    copied={copiedKey === "private"}
-                    isMobile={isMobile}
-                  />
-
-                  <LinkBox
-                    icon={<Globe size={16} />}
-                    title="Galeria pública"
-                    url={selectedLinks.publicGalleryUrl}
-                    onCopy={() => copyText(selectedLinks.publicGalleryUrl, "public")}
-                    copied={copiedKey === "public"}
-                    isMobile={isMobile}
-                  />
-                </>
-              )}
-            </div>
-
-            <div style={styles.panelCard}>
-              <div style={styles.panelHeader}>
-                <div>
-                  <p style={styles.kicker}>QR Code</p>
-                  <h2
-                    style={{
-                      ...styles.panelTitle,
-                      ...responsive.panelTitle,
-                    }}
-                  >
-                    Compartilhamento rápido
-                  </h2>
-                </div>
-              </div>
-
-              {!selectedEvent ? (
-                <p style={styles.emptyText}>
-                  Selecione um evento para gerar o QR Code.
+                  Selecione um evento para visualizar os detalhes.
                 </p>
               ) : (
                 <>
                   <div
                     style={{
-                      ...styles.qrPreview,
-                      ...responsive.qrPreview,
+                      ...styles.infoGrid,
+                      ...(isMobile ? styles.infoGridMobile : {}),
                     }}
                   >
-                    {qrCodeDataUrl ? (
-                      <img
-                        src={qrCodeDataUrl}
-                        alt="QR Code do evento"
-                        style={styles.qrImage}
-                      />
-                    ) : (
-                      <div style={styles.qrPlaceholder}>
-                        <QrCode size={32} />
-                        <span>Gerando QR Code...</span>
-                      </div>
-                    )}
+                    <InfoBox label="Slug" value={selectedEvent.slug} />
+                    <InfoBox
+                      label="Data"
+                      value={formatDate(selectedEvent.event_date)}
+                    />
+                    <InfoBox
+                      label="Upload"
+                      value={selectedEvent.is_upload_open ? "Aberto" : "Fechado"}
+                    />
+                    <InfoBox
+                      label="Modo da galeria"
+                      value={
+                        selectedEvent.event_settings?.gallery_mode === "public"
+                          ? "Pública"
+                          : "Privada"
+                      }
+                    />
+                    <InfoBox
+                      label="Vídeos"
+                      value={
+                        selectedEvent.event_settings?.allow_videos
+                          ? "Permitidos"
+                          : "Bloqueados"
+                      }
+                    />
+                    <InfoBox
+                      label="Nome do convidado"
+                      value={
+                        selectedEvent.event_settings?.require_guest_name
+                          ? "Obrigatório"
+                          : "Opcional"
+                      }
+                    />
                   </div>
 
-                  <div style={styles.qrActions}>
-                    <button
-                      type="button"
-                      onClick={() => copyText(selectedLinks.uploadUrl, "qrcode-link")}
-                      style={{
-                        ...styles.secondaryButton,
-                        ...responsive.actionButton,
-                      }}
-                    >
-                      <Copy size={16} />
-                      {copiedKey === "qrcode-link" ? "Copiado!" : "Copiar link"}
-                    </button>
+                  <div
+                    style={{
+                      ...styles.linksGrid,
+                      ...(isMobile ? styles.linksGridMobile : {}),
+                    }}
+                  >
+                    <LinkCard
+                      title="Link de upload"
+                      icon={<Link2 size={16} />}
+                      url={selectedLinks.uploadUrl}
+                      onCopy={() => copyText(selectedLinks.uploadUrl, "upload")}
+                      copied={copiedKey === "upload"}
+                    />
 
-                    <button
-                      type="button"
-                      onClick={downloadQr}
-                      style={{
-                        ...styles.secondaryButton,
-                        ...responsive.actionButton,
-                      }}
-                    >
-                      <Download size={16} />
-                      Baixar QR
-                    </button>
+                    <LinkCard
+                      title="Galeria privada"
+                      icon={<ExternalLink size={16} />}
+                      url={selectedLinks.privateGalleryUrl}
+                      onCopy={() =>
+                        copyText(selectedLinks.privateGalleryUrl, "private")
+                      }
+                      copied={copiedKey === "private"}
+                    />
+
+                    <LinkCard
+                      title="Galeria pública"
+                      icon={<Globe size={16} />}
+                      url={selectedLinks.publicGalleryUrl}
+                      onCopy={() => copyText(selectedLinks.publicGalleryUrl, "public")}
+                      copied={copiedKey === "public"}
+                    />
                   </div>
-
-                  <div style={styles.qrActions}>
-  <a
-    href={selectedLinks.uploadUrl}
-    target="_blank"
-    rel="noreferrer"
-    style={{
-      ...styles.primaryLinkButton,
-      ...responsive.actionButton,
-    }}
-  >
-    <ExternalLink size={16} />
-    Abrir upload
-  </a>
-
-  <Link
-    to={`/meus-eventos/${selectedEvent.slug}`}
-    style={{
-      ...styles.secondaryLinkButton,
-      ...responsive.actionButton,
-    }}
-  >
-    <Camera size={16} />
-    Ver detalhes do evento
-  </Link>
-
-  <Link
-    to={`/evento/${selectedEvent.slug}/configuracoes`}
-    style={{
-      ...styles.secondaryLinkButton,
-      ...responsive.actionButton,
-    }}
-  >
-    <Settings size={16} />
-    Configurações
-  </Link>
-</div>
                 </>
               )}
             </div>
-          </div>
+
+            <div
+              style={{
+                ...styles.secondaryGrid,
+                ...(isMobile ? styles.secondaryGridMobile : {}),
+              }}
+            >
+              <div style={styles.panelCard}>
+                <div style={styles.panelHeader}>
+                  <p style={styles.kicker}>QR Code</p>
+                  <h2 style={styles.panelTitle}>Compartilhamento rápido</h2>
+                </div>
+
+                {!selectedEvent ? (
+                  <p style={styles.emptyText}>
+                    Selecione um evento para gerar o QR Code.
+                  </p>
+                ) : (
+                  <>
+                    <div style={styles.qrPreview}>
+                      {qrCodeDataUrl ? (
+                        <img
+                          src={qrCodeDataUrl}
+                          alt="QR Code do evento"
+                          style={styles.qrImage}
+                        />
+                      ) : (
+                        <div style={styles.qrPlaceholder}>
+                          <QrCode size={30} />
+                          <span>Gerando QR Code...</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={styles.actionRow}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyText(selectedLinks.uploadUrl, "qrcode-link")
+                        }
+                        style={styles.secondaryButton}
+                      >
+                        <Copy size={16} />
+                        {copiedKey === "qrcode-link" ? "Copiado!" : "Copiar link"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={downloadQr}
+                        style={styles.secondaryButton}
+                      >
+                        <Download size={16} />
+                        Baixar QR
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div style={styles.panelCard}>
+                <div style={styles.panelHeader}>
+                  <p style={styles.kicker}>Ações rápidas</p>
+                  <h2 style={styles.panelTitle}>Acesso direto</h2>
+                </div>
+
+                {!selectedEvent ? (
+                  <p style={styles.emptyText}>
+                    Selecione um evento para exibir os atalhos.
+                  </p>
+                ) : (
+                  <div style={styles.quickActions}>
+                    <a
+                      href={selectedLinks.uploadUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={styles.primaryLinkButton}
+                    >
+                      <ExternalLink size={16} />
+                      Abrir upload
+                    </a>
+
+                    <Link
+                      to={`/evento/${selectedEvent.slug}/galeria`}
+                      style={styles.secondaryLinkButton}
+                    >
+                      <ImageIcon size={16} />
+                      Galeria privada
+                    </Link>
+
+                    <Link
+                      to={`/evento/${selectedEvent.slug}/configuracoes`}
+                      style={styles.secondaryLinkButton}
+                    >
+                      <Settings size={16} />
+                      Configurações
+                    </Link>
+
+                    <a
+                      href={selectedLinks.publicGalleryUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={styles.secondaryLinkButton}
+                    >
+                      <Globe size={16} />
+                      Galeria pública
+                    </a>
+
+                    <Link
+                      to={`/meus-eventos/${selectedEvent.slug}`}
+                      style={styles.secondaryLinkButton}
+                    >
+                      <Camera size={16} />
+                      Detalhes do evento
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
         </section>
       </main>
+    </div>
+  );
+}
+
+function StatCard({ icon, value, label }) {
+  return (
+    <div style={styles.statCard}>
+      <div style={styles.statIconWrap}>{icon}</div>
+      <div>
+        <div style={styles.statValue}>{value}</div>
+        <div style={styles.statLabel}>{label}</div>
+      </div>
     </div>
   );
 }
@@ -755,10 +742,10 @@ function InfoBox({ label, value }) {
   );
 }
 
-function LinkBox({ icon, title, url, onCopy, copied, isMobile }) {
+function LinkCard({ title, icon, url, onCopy, copied }) {
   return (
-    <div style={styles.linkBox}>
-      <div style={styles.linkBoxTitle}>
+    <div style={styles.linkCard}>
+      <div style={styles.linkCardTitle}>
         <span style={styles.linkIcon}>{icon}</span>
         <strong>{title}</strong>
       </div>
@@ -766,14 +753,7 @@ function LinkBox({ icon, title, url, onCopy, copied, isMobile }) {
       <div style={styles.linkUrl}>{url || "—"}</div>
 
       <div style={styles.linkActions}>
-        <button
-          type="button"
-          onClick={onCopy}
-          style={{
-            ...styles.secondaryButton,
-            ...(isMobile ? styles.mobileActionButton : {}),
-          }}
-        >
+        <button type="button" onClick={onCopy} style={styles.secondaryButton}>
           <Copy size={16} />
           {copied ? "Copiado!" : "Copiar"}
         </button>
@@ -782,10 +762,7 @@ function LinkBox({ icon, title, url, onCopy, copied, isMobile }) {
           href={url}
           target="_blank"
           rel="noreferrer"
-          style={{
-            ...styles.secondaryLinkButton,
-            ...(isMobile ? styles.mobileActionButton : {}),
-          }}
+          style={styles.secondaryLinkButton}
         >
           <ExternalLink size={16} />
           Abrir
@@ -795,145 +772,31 @@ function LinkBox({ icon, title, url, onCopy, copied, isMobile }) {
   );
 }
 
-function getResponsiveStyles(screenWidth) {
-  const isMobile = screenWidth <= MOBILE_BREAKPOINT;
-  const isTablet = screenWidth > MOBILE_BREAKPOINT && screenWidth <= TABLET_BREAKPOINT;
-
-  if (isMobile) {
-    return {
-      header: {
-        padding: "14px 16px",
-        alignItems: "stretch",
-      },
-      headerLeft: {
-        width: "100%",
-      },
-      headerRight: {
-        width: "100%",
-        justifyContent: "stretch",
-      },
-      partnerBadge: {
-        width: "100%",
-      },
-      main: {
-        padding: "16px",
-      },
-      heroCard: {
-        padding: "20px",
-        borderRadius: "24px",
-      },
-      heroTitle: {
-        fontSize: "26px",
-      },
-      heroSubtitle: {
-        fontSize: "14px",
-      },
-      statsGrid: {
-        gridTemplateColumns: "1fr",
-      },
-      statValue: {
-        fontSize: "24px",
-      },
-      contentGrid: {
-        gridTemplateColumns: "1fr",
-      },
-      panelTitle: {
-        fontSize: "21px",
-      },
-      eventTopRow: {
-        flexDirection: "column",
-        alignItems: "flex-start",
-      },
-      qrPreview: {
-        minHeight: "220px",
-      },
-      actionButton: {
-        width: "100%",
-      },
-      fullWidthButtonMaybe: {
-        width: "100%",
-      },
-    };
-  }
-
-  if (isTablet) {
-    return {
-      header: {
-        padding: "18px 20px",
-      },
-      main: {
-        padding: "20px",
-      },
-      heroCard: {
-        padding: "24px",
-      },
-      heroTitle: {
-        fontSize: "28px",
-      },
-      statsGrid: {
-        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-      },
-      contentGrid: {
-        gridTemplateColumns: "1fr",
-      },
-      panelTitle: {
-        fontSize: "22px",
-      },
-      qrPreview: {
-        minHeight: "240px",
-      },
-      actionButton: {
-        flex: "1 1 220px",
-      },
-      fullWidthButtonMaybe: {},
-    };
-  }
-
-  return {
-    header: {},
-    headerLeft: {},
-    headerRight: {},
-    partnerBadge: {},
-    main: {},
-    heroCard: {},
-    heroTitle: {},
-    heroSubtitle: {},
-    statsGrid: {},
-    statValue: {},
-    contentGrid: {},
-    panelTitle: {},
-    eventTopRow: {},
-    qrPreview: {},
-    actionButton: {},
-    fullWidthButtonMaybe: {},
-  };
-}
-
 const styles = {
   page: {
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(240,210,170,0.18), transparent 25%), radial-gradient(circle at bottom right, rgba(176,137,104,0.16), transparent 22%), linear-gradient(180deg, #f7f5f2 0%, #f4f0ea 100%)",
+      "radial-gradient(circle at top left, rgba(240,210,170,0.18), transparent 25%), radial-gradient(circle at bottom right, rgba(176,137,104,0.16), transparent 22%), linear-gradient(180deg, #f7f5f2 0%, #f3eee7 100%)",
     position: "relative",
     overflow: "hidden",
   },
-  backgroundGlowTop: {
+  glowOne: {
     position: "absolute",
     top: "-120px",
-    left: "-120px",
+    right: "-120px",
     width: "320px",
     height: "320px",
     borderRadius: "50%",
-    background: "rgba(176,137,104,0.12)",
+    background: "rgba(176,137,104,0.14)",
     filter: "blur(60px)",
     pointerEvents: "none",
   },
-  backgroundGlowBottom: {
+  glowTwo: {
     position: "absolute",
-    bottom: "-140px",
-    right: "-120px",
-    width: "340px",
-    height: "340px",
+    bottom: "-100px",
+    left: "-90px",
+    width: "300px",
+    height: "300px",
     borderRadius: "50%",
     background: "rgba(30,36,64,0.08)",
     filter: "blur(70px)",
@@ -988,15 +851,17 @@ const styles = {
     gap: "16px",
     padding: "20px 28px",
     backdropFilter: "blur(18px)",
-    background: "rgba(247,245,242,0.72)",
+    background: "rgba(247,245,242,0.74)",
     borderBottom: "1px solid rgba(30,36,64,0.08)",
+  },
+  headerMobile: {
+    padding: "16px",
     flexWrap: "wrap",
   },
-  headerLeft: {
+  headerBrand: {
     display: "flex",
     alignItems: "center",
     gap: "14px",
-    minWidth: 0,
   },
   brandIcon: {
     width: "52px",
@@ -1007,10 +872,9 @@ const styles = {
     display: "grid",
     placeItems: "center",
     boxShadow: "0 12px 28px rgba(30,36,64,0.22)",
-    flexShrink: 0,
   },
   brandTitle: {
-    fontSize: "17px",
+    fontSize: "18px",
     fontWeight: 800,
     color: "#1f2333",
   },
@@ -1018,37 +882,6 @@ const styles = {
     fontSize: "13px",
     color: "#7c8295",
     marginTop: "2px",
-  },
-  headerRight: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-  },
-  partnerBadge: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    background: "rgba(255,255,255,0.78)",
-    border: "1px solid rgba(30,36,64,0.08)",
-    borderRadius: "16px",
-    padding: "10px 14px",
-    color: "#1f2333",
-    minWidth: 0,
-  },
-  partnerBadgeText: {
-    display: "grid",
-    gap: "2px",
-    minWidth: 0,
-  },
-  partnerName: {
-    fontSize: "14px",
-  },
-  partnerEmail: {
-    fontSize: "12px",
-    color: "#737a8f",
-    wordBreak: "break-word",
   },
   logoutButton: {
     minHeight: "44px",
@@ -1070,6 +903,9 @@ const styles = {
     zIndex: 1,
     padding: "28px",
   },
+  mainMobile: {
+    padding: "16px",
+  },
   alert: {
     marginBottom: "18px",
     background: "#fff4e8",
@@ -1079,7 +915,7 @@ const styles = {
     padding: "14px 16px",
     boxShadow: "0 10px 24px rgba(138,90,0,0.06)",
   },
-  heroCard: {
+  hero: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -1088,66 +924,163 @@ const styles = {
     background:
       "linear-gradient(135deg, rgba(30,36,64,0.98) 0%, rgba(52,64,109,0.96) 100%)",
     borderRadius: "30px",
-    padding: "28px",
+    padding: "30px",
     color: "#fff",
     boxShadow: "0 18px 50px rgba(30,36,64,0.18)",
     marginBottom: "22px",
   },
-  kicker: {
-    margin: 0,
-    color: "#e5c79a",
-    fontWeight: 800,
+  heroMobile: {
+    padding: "22px",
+    borderRadius: "24px",
+  },
+  heroContent: {
+    maxWidth: "760px",
+  },
+  heroBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    borderRadius: "999px",
+    padding: "8px 14px",
+    background: "rgba(255,255,255,0.12)",
+    color: "#f1d9b0",
+    fontWeight: 700,
     fontSize: "12px",
-    letterSpacing: ".08em",
-    textTransform: "uppercase",
+    marginBottom: "14px",
   },
   heroTitle: {
-    margin: "10px 0 10px",
-    fontSize: "32px",
-    lineHeight: 1.1,
+    margin: "0 0 12px",
+    fontSize: "38px",
+    lineHeight: 1.08,
   },
-  heroSubtitle: {
+  heroTitleMobile: {
+    fontSize: "28px",
+  },
+  heroText: {
     margin: 0,
-    maxWidth: "700px",
-    color: "rgba(255,255,255,0.8)",
+    color: "rgba(255,255,255,0.82)",
     fontSize: "15px",
-    lineHeight: 1.6,
+    lineHeight: 1.7,
+    maxWidth: "720px",
   },
   heroActions: {
     display: "flex",
     gap: "10px",
     flexWrap: "wrap",
-    width: "100%",
-    maxWidth: "260px",
   },
-  refreshButton: {
+  primaryButton: {
     minHeight: "46px",
-    width: "100%",
-    border: "1px solid rgba(255,255,255,0.18)",
+    border: "none",
     borderRadius: "14px",
-    background: "rgba(255,255,255,0.12)",
-    color: "#fff",
-    padding: "12px 18px",
+    background: "#fff",
+    color: "#1f2333",
+    padding: "0 18px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 800,
     cursor: "pointer",
+    boxShadow: "0 12px 24px rgba(255,255,255,0.12)",
+  },
+  dashboardGrid: {
+    display: "grid",
+    gridTemplateColumns: "380px minmax(0, 1fr)",
+    gap: "20px",
+    alignItems: "start",
+  },
+  dashboardGridMobile: {
+    gridTemplateColumns: "1fr",
+  },
+  sidebar: {
+    display: "grid",
+    gap: "20px",
+  },
+  mainPanel: {
+    display: "grid",
+    gap: "20px",
+  },
+  profileCard: {
+    background: "rgba(255,255,255,0.78)",
+    backdropFilter: "blur(14px)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    borderRadius: "28px",
+    padding: "22px",
+    boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
+  },
+  profileTop: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    marginBottom: "16px",
+  },
+  avatar: {
+    width: "72px",
+    height: "72px",
+    borderRadius: "50%",
+    objectFit: "cover",
+    border: "3px solid rgba(255,255,255,0.9)",
+    boxShadow: "0 10px 22px rgba(24,32,79,0.12)",
+  },
+  avatarFallback: {
+    width: "72px",
+    height: "72px",
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    background: "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
+    color: "#fff",
+    boxShadow: "0 10px 22px rgba(24,32,79,0.12)",
+    fontSize: "28px",
+    fontWeight: 800,
+  },
+  profileName: {
+    fontSize: "19px",
+    fontWeight: 800,
+    color: "#1f2333",
+    lineHeight: 1.2,
+  },
+  profileEmail: {
+    marginTop: "4px",
+    fontSize: "13px",
+    color: "#6f768b",
+    wordBreak: "break-word",
+  },
+  profileActions: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+  profileActionButton: {
+    minHeight: "40px",
+    borderRadius: "14px",
+    border: "1px solid #e1ddd6",
+    background: "#fff",
+    color: "#29314d",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    textDecoration: "none",
     fontWeight: 700,
-    backdropFilter: "blur(8px)",
+    padding: "0 14px",
   },
   statsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: "16px",
-    marginBottom: "22px",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "14px",
+  },
+  statsGridMobile: {
+    gridTemplateColumns: "1fr",
   },
   statCard: {
-    background: "rgba(255,255,255,0.8)",
+    background: "rgba(255,255,255,0.82)",
     border: "1px solid rgba(30,36,64,0.08)",
-    borderRadius: "24px",
-    padding: "20px",
+    borderRadius: "22px",
+    padding: "18px",
     boxShadow: "0 14px 34px rgba(24,32,79,0.06)",
     display: "flex",
     alignItems: "center",
     gap: "14px",
-    minWidth: 0,
   },
   statIconWrap: {
     width: "46px",
@@ -1170,22 +1103,6 @@ const styles = {
     fontSize: "13px",
     color: "#71788c",
   },
-  contentGrid: {
-    display: "grid",
-    gridTemplateColumns: "1.05fr 0.95fr",
-    gap: "20px",
-    alignItems: "start",
-  },
-  leftColumn: {
-    display: "grid",
-    gap: "20px",
-    minWidth: 0,
-  },
-  rightColumn: {
-    display: "grid",
-    gap: "20px",
-    minWidth: 0,
-  },
   panelCard: {
     background: "rgba(255,255,255,0.78)",
     backdropFilter: "blur(14px)",
@@ -1193,10 +1110,25 @@ const styles = {
     borderRadius: "28px",
     padding: "22px",
     boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
-    minWidth: 0,
+  },
+  panelCardLarge: {
+    background: "rgba(255,255,255,0.82)",
+    backdropFilter: "blur(14px)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    borderRadius: "30px",
+    padding: "24px",
+    boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
   },
   panelHeader: {
     marginBottom: "16px",
+  },
+  kicker: {
+    margin: 0,
+    color: "#b08968",
+    fontWeight: 800,
+    fontSize: "12px",
+    letterSpacing: ".08em",
+    textTransform: "uppercase",
   },
   panelTitle: {
     margin: "8px 0 0",
@@ -1228,20 +1160,17 @@ const styles = {
     background: "#fff6eb",
     boxShadow: "0 12px 26px rgba(176,137,104,0.12)",
   },
-  eventItemContent: {
-    display: "grid",
-    gap: "8px",
-  },
-  eventTopRow: {
+  eventItemTop: {
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
-    gap: "12px",
+    alignItems: "center",
+    gap: "10px",
     flexWrap: "wrap",
+    marginBottom: "8px",
   },
   eventName: {
     color: "#1f2333",
-    fontSize: "16px",
+    fontSize: "15px",
   },
   statusBadge: {
     minHeight: "28px",
@@ -1268,17 +1197,20 @@ const styles = {
     fontSize: "13px",
     color: "#747c90",
   },
-  eventDescription: {
-    fontSize: "14px",
-    color: "#5f667b",
-    lineHeight: 1.5,
+  infoGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: "12px",
+    marginBottom: "16px",
+  },
+  infoGridMobile: {
+    gridTemplateColumns: "1fr",
   },
   infoBox: {
     background: "#f8f6f2",
     border: "1px solid #eee9e1",
     borderRadius: "16px",
     padding: "12px 14px",
-    marginBottom: "10px",
   },
   infoLabel: {
     display: "block",
@@ -1293,14 +1225,21 @@ const styles = {
     fontSize: "14px",
     wordBreak: "break-word",
   },
-  linkBox: {
+  linksGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: "14px",
+  },
+  linksGridMobile: {
+    gridTemplateColumns: "1fr",
+  },
+  linkCard: {
     background: "#f8f6f2",
     border: "1px solid #eee9e1",
     borderRadius: "18px",
     padding: "14px",
-    marginBottom: "12px",
   },
-  linkBoxTitle: {
+  linkCardTitle: {
     display: "flex",
     alignItems: "center",
     gap: "8px",
@@ -1326,6 +1265,48 @@ const styles = {
     display: "flex",
     gap: "10px",
     flexWrap: "wrap",
+  },
+  secondaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.1fr)",
+    gap: "20px",
+    alignItems: "start",
+  },
+  secondaryGridMobile: {
+    gridTemplateColumns: "1fr",
+  },
+  qrPreview: {
+    background: "#fff",
+    border: "1px solid #ece8e0",
+    borderRadius: "20px",
+    minHeight: "260px",
+    display: "grid",
+    placeItems: "center",
+    padding: "14px",
+    marginBottom: "12px",
+  },
+  qrImage: {
+    width: "100%",
+    maxWidth: "230px",
+    height: "auto",
+    display: "block",
+  },
+  qrPlaceholder: {
+    display: "grid",
+    gap: "10px",
+    placeItems: "center",
+    color: "#7a8091",
+    fontSize: "14px",
+    textAlign: "center",
+  },
+  actionRow: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+  quickActions: {
+    display: "grid",
+    gap: "12px",
   },
   secondaryButton: {
     minHeight: "42px",
@@ -1370,38 +1351,5 @@ const styles = {
     textDecoration: "none",
     fontWeight: 700,
     padding: "10px 14px",
-  },
-  mobileActionButton: {
-    width: "100%",
-  },
-  qrPreview: {
-    background: "#fff",
-    border: "1px solid #ece8e0",
-    borderRadius: "20px",
-    minHeight: "260px",
-    display: "grid",
-    placeItems: "center",
-    padding: "14px",
-    marginBottom: "12px",
-  },
-  qrImage: {
-    width: "100%",
-    maxWidth: "230px",
-    height: "auto",
-    display: "block",
-  },
-  qrPlaceholder: {
-    display: "grid",
-    gap: "10px",
-    placeItems: "center",
-    color: "#7a8091",
-    fontSize: "14px",
-    textAlign: "center",
-  },
-  qrActions: {
-    display: "flex",
-    gap: "10px",
-    flexWrap: "wrap",
-    marginBottom: "10px",
   },
 };
