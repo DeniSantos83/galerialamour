@@ -24,6 +24,13 @@ if (!ffmpegPath) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+const MUSIC_LIBRARY = {
+  romantico: path.join(__dirname, "assets", "romantico.mp3"),
+  jovem: path.join(__dirname, "assets", "jovem.mp3"),
+  forro: path.join(__dirname, "assets", "forro.mp3"),
+  carnaval: path.join(__dirname, "assets", "carnaval.mp3"),
+};
+
 function shuffleArray(array) {
   const clone = [...array];
 
@@ -190,7 +197,6 @@ exports.handler = async function (event) {
     const approvedImages = (uploads || []).filter((item) => {
       const fileType = String(item.file_type || "").toLowerCase();
       const mimeType = String(item.mime_type || "").toLowerCase();
-
       return fileType === "image" || mimeType.startsWith("image/");
     });
 
@@ -337,7 +343,17 @@ exports.handler = async function (event) {
 
     const outputMp4Path = path.join(tmpDir, "highlight.mp4");
 
-    await runFfmpeg([
+    const musicStyle = String(film.style || "romantico").toLowerCase();
+    const selectedMusicPath =
+      MUSIC_LIBRARY[musicStyle] || MUSIC_LIBRARY.romantico;
+    const hasMusicFile =
+      selectedMusicPath && fs.existsSync(selectedMusicPath);
+
+    console.log("Estilo musical:", musicStyle);
+    console.log("Arquivo musical:", selectedMusicPath);
+    console.log("Tem trilha:", hasMusicFile);
+
+    const ffmpegArgs = [
       "-y",
       "-f",
       "concat",
@@ -345,16 +361,36 @@ exports.handler = async function (event) {
       "0",
       "-i",
       imageListPath,
+    ];
+
+    if (hasMusicFile) {
+      ffmpegArgs.push("-i", selectedMusicPath);
+    }
+
+    ffmpegArgs.push(
       "-vf",
       "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
       "-r",
       "30",
       "-pix_fmt",
       "yuv420p",
-      "-movflags",
-      "+faststart",
-      outputMp4Path,
-    ]);
+      "-c:v",
+      "libx264"
+    );
+
+    if (hasMusicFile) {
+      ffmpegArgs.push(
+        "-filter:a",
+        "volume=0.18",
+        "-c:a",
+        "aac",
+        "-shortest"
+      );
+    }
+
+    ffmpegArgs.push("-movflags", "+faststart", outputMp4Path);
+
+    await runFfmpeg(ffmpegArgs);
 
     console.log("MP4 gerado:", outputMp4Path);
 
@@ -403,6 +439,7 @@ exports.handler = async function (event) {
         outputPath: storagePath,
         durationSeconds: totalDuration,
         mode: requestMode,
+        musicStyle,
       }),
     };
   } catch (error) {
