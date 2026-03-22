@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Mail,
   Phone,
@@ -37,10 +37,107 @@ export default function PartnersPage() {
 
   const [form, setForm] = useState(initialForm);
   const [avatarPreview, setAvatarPreview] = useState("");
+  const [screenWidth, setScreenWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1440
+  );
+
 
   useEffect(() => {
     loadPartners();
   }, []);
+  useEffect(() => {
+    function handleResize() {
+      setScreenWidth(window.innerWidth);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const responsive = useMemo(() => {
+    const isMobile = screenWidth <= 768;
+    const isTablet = screenWidth > 768 && screenWidth <= 1080;
+
+    if (isMobile) {
+      return {
+        grid: { gridTemplateColumns: "1fr", gap: "16px" },
+        title: { fontSize: "26px" },
+        avatarCard: {
+          flexDirection: "column",
+          alignItems: "flex-start",
+        },
+        avatarInfo: {
+          minWidth: 0,
+          width: "100%",
+        },
+        partnerTop: {
+          flexDirection: "column",
+          alignItems: "flex-start",
+        },
+        partnerMetaGrid: {
+          gridTemplateColumns: "1fr",
+        },
+        partnerActions: {
+          flexDirection: "column",
+        },
+        actionButton: {
+          width: "100%",
+        },
+        primaryButton: {
+          width: "100%",
+        },
+        secondaryButton: {
+          width: "100%",
+        },
+        formActions: {
+          flexDirection: "column",
+        },
+        card: {
+          padding: "18px",
+        },
+        subtitle: {
+          fontSize: "14px",
+        },
+      };
+    }
+
+    if (isTablet) {
+      return {
+        grid: { gridTemplateColumns: "1fr" },
+        title: {},
+        avatarCard: {},
+        avatarInfo: {},
+        partnerTop: {},
+        partnerMetaGrid: {
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        },
+        partnerActions: {},
+        actionButton: {},
+        primaryButton: {},
+        secondaryButton: {},
+        formActions: {},
+        card: {},
+        subtitle: {},
+      };
+    }
+
+    return {
+      grid: {},
+      title: {},
+      avatarCard: {},
+      avatarInfo: {},
+      partnerTop: {},
+      partnerMetaGrid: {},
+      partnerActions: {},
+      actionButton: {},
+      primaryButton: {},
+      secondaryButton: {},
+      formActions: {},
+      card: {},
+      subtitle: {},
+    };
+  }, [screenWidth]);
+
 
   async function loadPartners() {
     setLoading(true);
@@ -261,8 +358,8 @@ export default function PartnersPage() {
       <div style={styles.header}>
         <div>
           <p style={styles.kicker}>Administração</p>
-          <h1 style={styles.title}>Fotógrafos Parceiros</h1>
-          <p style={styles.subtitle}>
+          <h1 style={{ ...styles.title, ...responsive.title }}>Fotógrafos Parceiros</h1>
+          <p style={{ ...styles.subtitle, ...responsive.subtitle }}>
             Cadastre parceiros pelo email. Quando eles criarem a conta com o mesmo email,
             o sistema poderá vincular o acesso automaticamente.
           </p>
@@ -271,8 +368,8 @@ export default function PartnersPage() {
 
       {message ? <div style={styles.alert}>{message}</div> : null}
 
-      <div style={styles.grid}>
-        <section style={styles.card}>
+      <div style={{ ...styles.grid, ...responsive.grid }}>
+        <section style={{ ...styles.card, ...responsive.card }}>
           <div style={styles.cardHeader}>
             <div style={styles.cardIcon}>
               <UserRoundPlus size={18} />
@@ -298,7 +395,7 @@ export default function PartnersPage() {
               style={{ display: "none" }}
             />
 
-            <div style={styles.avatarCard}>
+            <div style={{ ...styles.avatarCard, ...responsive.avatarCard }}>
               <div style={styles.avatarPreviewWrap}>
                 {avatarPreview ? (
                   <img
@@ -313,7 +410,7 @@ export default function PartnersPage() {
                 )}
               </div>
 
-              <div style={styles.avatarInfo}>
+              <div style={{ ...styles.avatarInfo, ...responsive.avatarInfo }}>
                 <h3 style={styles.avatarTitle}>Foto do fotógrafo</h3>
                 <p style={styles.avatarText}>
                   Essa foto poderá aparecer no painel, nos detalhes do evento e nas páginas públicas.
@@ -413,8 +510,8 @@ export default function PartnersPage() {
               Parceiro ativo
             </label>
 
-            <div style={styles.formActions}>
-              <button type="submit" style={styles.primaryButton} disabled={saving}>
+            <div style={{ ...styles.formActions, ...responsive.formActions }}>
+              <button type="submit" style={{ ...styles.primaryButton, ...responsive.primaryButton }} disabled={saving}>
                 {saving
                   ? "Salvando..."
                   : editingPartnerId
@@ -426,7 +523,7 @@ export default function PartnersPage() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  style={styles.secondaryButton}
+                  style={{ ...styles.secondaryButton, ...responsive.secondaryButton }}
                 >
                   <X size={16} />
                   Cancelar edição
@@ -436,7 +533,7 @@ export default function PartnersPage() {
           </form>
         </section>
 
-        <section style={styles.card}>
+        <section style={{ ...styles.card, ...responsive.card }}>
           <div style={styles.cardHeader}>
             <div style={styles.cardIconAlt}>
               <ShieldCheck size={18} />
@@ -457,7 +554,7 @@ export default function PartnersPage() {
             <div style={styles.list}>
               {partners.map((partner) => (
                 <div key={partner.id} style={styles.partnerCard}>
-                  <div style={styles.partnerTop}>
+                  <div style={{ ...styles.partnerTop, ...responsive.partnerTop }}>
                     <div style={styles.partnerIdentity}>
                       {partner.avatar_url ? (
                         <img
@@ -487,7 +584,7 @@ export default function PartnersPage() {
                     </span>
                   </div>
 
-                  <div style={styles.partnerMetaGrid}>
+                  <div style={{ ...styles.partnerMetaGrid, ...responsive.partnerMetaGrid }}>
                     <MetaItem label="Telefone" value={partner.phone || "—"} />
                     <MetaItem
                       label="Conta vinculada"
@@ -502,11 +599,11 @@ export default function PartnersPage() {
                     </div>
                   ) : null}
 
-                  <div style={styles.partnerActions}>
+                  <div style={{ ...styles.partnerActions, ...responsive.partnerActions }}>
                     <button
                       type="button"
                       onClick={() => startEdit(partner)}
-                      style={styles.actionButton}
+                      style={{ ...styles.actionButton, ...responsive.actionButton }}
                     >
                       <Pencil size={15} />
                       Editar
@@ -517,6 +614,7 @@ export default function PartnersPage() {
                       onClick={() => handleToggleActive(partner)}
                       style={{
                         ...styles.actionButton,
+                        ...responsive.actionButton,
                         ...(partner.active
                           ? styles.actionButtonWarn
                           : styles.actionButtonSuccess),
@@ -548,6 +646,8 @@ function MetaItem({ label, value }) {
 const styles = {
   page: {
     padding: "4px",
+    width: "100%",
+    boxSizing: "border-box",
   },
   header: {
     marginBottom: "18px",
@@ -589,6 +689,7 @@ const styles = {
     borderRadius: "24px",
     padding: "22px",
     boxShadow: "0 12px 30px rgba(24, 32, 79, 0.06)",
+    minWidth: 0,
   },
   cardHeader: {
     display: "flex",

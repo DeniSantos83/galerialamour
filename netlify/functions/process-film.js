@@ -5,10 +5,25 @@ const { spawn } = require("child_process");
 const ffmpegPath = require("ffmpeg-static");
 const { createClient } = require("@supabase/supabase-js");
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL) {
+  throw new Error("SUPABASE_URL não definido na Netlify Function.");
+}
+
+if (!SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error("SUPABASE_SERVICE_ROLE_KEY não definido na Netlify Function.");
+}
+
+if (!ffmpegPath) {
+  throw new Error("ffmpeg-static não encontrou binário do FFmpeg.");
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 async function downloadToFile(url, outputPath) {
   console.log("Baixando arquivo:", url);
@@ -127,6 +142,7 @@ exports.handler = async function () {
       .update({
         status: "processing",
         error_message: null,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", film.id);
 
@@ -159,12 +175,13 @@ exports.handler = async function () {
 
     const { data: usedMediaRows, error: usedMediaError } = await supabase
       .from("event_film_items")
-      .select("media_id");
+      .select("media_id, film_id, event_films!inner(event_id)");
 
     if (usedMediaError) throw usedMediaError;
 
     const usedMediaIds = new Set(
       (usedMediaRows || [])
+        .filter((row) => row.event_films?.event_id === film.event_id)
         .map((row) => row.media_id)
         .filter(Boolean)
     );
@@ -191,6 +208,7 @@ exports.handler = async function () {
       media_path: item.file_path,
       approved: true,
       sort_order: index,
+      created_at: new Date().toISOString(),
     }));
 
     const { error: itemsError } = await supabase
@@ -226,10 +244,22 @@ exports.handler = async function () {
       localImagePaths.push(localPath);
     }
 
+    const totalDuration = Number(film.duration_seconds) > 0
+      ? Number(film.duration_seconds)
+      : 30;
+
+    const secondsPerImage = Math.max(
+      1,
+      Number((totalDuration / localImagePaths.length).toFixed(2))
+    );
+
+    console.log("Duração total:", totalDuration);
+    console.log("Segundos por imagem:", secondsPerImage);
+
     const imageListContent = localImagePaths
       .map((imgPath) => {
         const escaped = imgPath.replace(/'/g, "'\\''");
-        return `file '${escaped}'\nduration 2`;
+        return `file '${escaped}'\nduration ${secondsPerImage}`;
       })
       .join("\n");
 
@@ -289,8 +319,6 @@ exports.handler = async function () {
 
     if (signedUrlError) throw signedUrlError;
 
-    console.log("Signed URL gerada.");
-
     const { error: readyError } = await supabase
       .from("event_films")
       .update({
@@ -298,6 +326,7 @@ exports.handler = async function () {
         output_path: storagePath,
         output_url: signedUrlData.signedUrl,
         error_message: null,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", film.id);
 
@@ -313,6 +342,7 @@ exports.handler = async function () {
         filmId: film.id,
         selectedCount: selectedImages.length,
         outputPath: storagePath,
+        durationSeconds: totalDuration,
       }),
     };
   } catch (error) {
@@ -325,6 +355,7 @@ exports.handler = async function () {
           .update({
             status: "failed",
             error_message: error.message || "Erro interno ao processar filme.",
+            updated_at: new Date().toISOString(),
           })
           .eq("id", currentFilmId);
       } catch (updateError) {

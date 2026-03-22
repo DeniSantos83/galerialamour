@@ -12,6 +12,7 @@ import {
   Link2,
   LogOut,
   MessageCircle,
+  PlayCircle,
   QrCode,
   Settings,
   Sparkles,
@@ -21,10 +22,14 @@ import { supabase } from "../lib/supabase";
 
 const MOBILE_BREAKPOINT = 768;
 const TABLET_BREAKPOINT = 1080;
+const FILM_STORAGE_BUCKET = "event-media";
+const FILM_DURATION_OPTIONS = [15, 30, 45];
 
 export default function MeusEventos() {
   const [authLoading, setAuthLoading] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [loadingFilms, setLoadingFilms] = useState(false);
+  const [generatingFilm, setGeneratingFilm] = useState(false);
 
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -33,9 +38,13 @@ export default function MeusEventos() {
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
 
+  const [eventFilms, setEventFilms] = useState([]);
+  const [filmItems, setFilmItems] = useState([]);
+
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
   const [message, setMessage] = useState("");
+  const [selectedFilmDuration, setSelectedFilmDuration] = useState(30);
   const [screenWidth, setScreenWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1440
   );
@@ -104,6 +113,33 @@ export default function MeusEventos() {
     };
   }, [partnerInfo, profile, user]);
 
+  const featuredFilms = useMemo(() => {
+    return [...eventFilms].sort((a, b) => {
+      const aReady = a.status === "completed" || a.status === "ready" ? 1 : 0;
+      const bReady = b.status === "completed" || b.status === "ready" ? 1 : 0;
+
+      if (aReady !== bReady) return bReady - aReady;
+
+      const aDate = new Date(a.created_at || 0).getTime();
+      const bDate = new Date(b.created_at || 0).getTime();
+      return bDate - aDate;
+    });
+  }, [eventFilms]);
+
+  const videoItems = useMemo(() => {
+    return filmItems.filter((item) => {
+      const mediaType = String(item.media_type || "").toLowerCase();
+      return mediaType.includes("video");
+    });
+  }, [filmItems]);
+
+  const hasProcessingFilm = useMemo(() => {
+    return eventFilms.some((film) => {
+      const status = String(film.status || "").toLowerCase();
+      return status === "queued" || status === "processing";
+    });
+  }, [eventFilms]);
+
   useEffect(() => {
     loadSession();
   }, []);
@@ -125,37 +161,46 @@ export default function MeusEventos() {
     }
   }, [selectedEvent, baseUrl]);
 
+  useEffect(() => {
+    if (selectedEvent?.id) {
+      loadFilmsForEvent(selectedEvent.id);
+    } else {
+      setEventFilms([]);
+      setFilmItems([]);
+    }
+  }, [selectedEvent?.id]);
+
   async function loadSession() {
     try {
       setAuthLoading(true);
       setMessage("");
 
       const {
-        data: { user },
+        data: { user: authUser },
         error: userError,
       } = await supabase.auth.getUser();
 
       if (userError) throw userError;
 
-      if (!user) {
+      if (!authUser) {
         setUser(null);
         setProfile(null);
         setPartnerInfo(null);
         return;
       }
 
-      setUser(user);
+      setUser(authUser);
 
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", user.id)
+        .eq("id", authUser.id)
         .maybeSingle();
 
       if (profileError) throw profileError;
 
       setProfile(profileData || null);
-      await loadEvents();
+      await loadEvents(authUser.id);
     } catch (error) {
       console.error("Erro ao carregar sessão:", error);
       setMessage("Erro ao carregar sessão do usuário.");
@@ -164,14 +209,18 @@ export default function MeusEventos() {
     }
   }
 
-  async function loadEvents() {
+  async function loadEvents(profileIdFromSession) {
     try {
       setLoadingEvents(true);
 
-      const { data: userData } = await supabase.auth.getUser();
-      const authUser = userData.user;
+      let profileId = profileIdFromSession;
 
-      if (!authUser) {
+      if (!profileId) {
+        const { data: userData } = await supabase.auth.getUser();
+        profileId = userData?.user?.id || null;
+      }
+
+      if (!profileId) {
         setEvents([]);
         setPartnerInfo(null);
         return;
@@ -182,8 +231,8 @@ export default function MeusEventos() {
         .select(
           "id, profile_id, studio_name, phone, notes, active, created_at, email, avatar_url"
         )
-        .eq("profile_id", authUser.id)
-        .single();
+        .eq("profile_id", profileId)
+        .maybeSingle();
 
       if (partnerError || !partner) {
         console.error("Parceiro não encontrado", partnerError);
@@ -196,10 +245,12 @@ export default function MeusEventos() {
 
       const { data: eventsData, error } = await supabase
         .from("events")
-        .select(`
+        .select(
+          `
           *,
           event_settings (*)
-        `)
+        `
+        )
         .eq("partner_id", partner.id)
         .order("created_at", { ascending: false });
 
@@ -226,6 +277,131 @@ export default function MeusEventos() {
       setMessage("Erro ao carregar eventos do parceiro.");
     } finally {
       setLoadingEvents(false);
+    }
+  }
+
+  async function loadFilmsForEvent(eventId) {
+    try {
+      setLoadingFilms(true);
+
+      const { data: filmsData, error: filmsError } = await supabase
+        .from("event_films")
+        .select("*")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: false });
+
+      if (filmsError) throw filmsError;
+
+      const films = filmsData || [];
+      setEventFilms(films);
+
+      if (films.length === 0) {
+        setFilmItems([]);
+        return;
+      }
+
+      const filmIds = films.map((film) => film.id);
+
+      const { data: itemsData, error: itemsError } = await supabase
+        .from("event_film_items")
+        .select("*")
+        .in("film_id", filmIds)
+        .eq("approved", true)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false });
+
+      if (itemsError) throw itemsError;
+
+      setFilmItems(itemsData || []);
+    } catch (error) {
+      console.error("Erro ao carregar filmes do evento:", error);
+      setEventFilms([]);
+      setFilmItems([]);
+    } finally {
+      setLoadingFilms(false);
+    }
+  }
+
+  async function updateQueuedFilmDuration(eventId, durationSeconds) {
+    const { data: queuedFilm, error: queuedFilmError } = await supabase
+      .from("event_films")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("status", "queued")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (queuedFilmError) throw queuedFilmError;
+    if (!queuedFilm?.id) return null;
+
+    const { error: updateError } = await supabase
+      .from("event_films")
+      .update({
+        duration_seconds: durationSeconds,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", queuedFilm.id);
+
+    if (updateError) throw updateError;
+
+    return queuedFilm.id;
+  }
+
+  async function triggerFilmProcessing() {
+    const response = await fetch("/.netlify/functions/process-film", {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || "Não foi possível iniciar o processamento do filme.");
+    }
+
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async function handleGenerateFilm() {
+    if (!selectedEvent?.id || generatingFilm || hasProcessingFilm) return;
+
+    try {
+      setGeneratingFilm(true);
+      setMessage("");
+
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      const { error } = await supabase.rpc(
+        "generate_event_film_from_unused_public_photos",
+        {
+          p_event_id: selectedEvent.id,
+          p_created_by: authUser?.id || null,
+          p_title: null,
+          p_style: "cinematic",
+          p_format: "mp4",
+        }
+      );
+
+      if (error) throw error;
+
+      await updateQueuedFilmDuration(selectedEvent.id, selectedFilmDuration);
+      await triggerFilmProcessing();
+      await loadFilmsForEvent(selectedEvent.id);
+      setMessage(`Filme enviado para processamento (${selectedFilmDuration}s).`);
+
+      setTimeout(() => {
+        loadFilmsForEvent(selectedEvent.id);
+      }, 2500);
+    } catch (error) {
+      console.error("Erro ao gerar filme:", error);
+      setMessage(error?.message || "Não foi possível gerar o filme.");
+    } finally {
+      setGeneratingFilm(false);
     }
   }
 
@@ -285,6 +461,44 @@ export default function MeusEventos() {
     if (!value) return "";
     const clean = value.replace(/\D/g, "");
     return clean ? `https://wa.me/${clean}` : "";
+  }
+
+  function getPublicMediaUrl(path) {
+    if (!path) return "";
+    if (path.startsWith("http://") || path.startsWith("https://")) return path;
+
+    const { data } = supabase.storage
+      .from(FILM_STORAGE_BUCKET)
+      .getPublicUrl(path);
+
+    return data?.publicUrl || "";
+  }
+
+  function getFilmOutputUrl(film) {
+    if (!film) return "";
+    return film.output_url || getPublicMediaUrl(film.output_path);
+  }
+
+  function getFilmPreviewItems(filmId) {
+    return videoItems.filter((item) => item.film_id === filmId);
+  }
+
+  function getFilmStatusLabel(status) {
+    const normalized = String(status || "").toLowerCase();
+
+    if (normalized === "completed" || normalized === "ready") {
+      return "Pronto";
+    }
+
+    if (normalized === "processing" || normalized === "queued") {
+      return "Processando";
+    }
+
+    if (normalized === "error" || normalized === "failed") {
+      return "Erro";
+    }
+
+    return status || "Sem status";
   }
 
   if (authLoading) {
@@ -471,31 +685,28 @@ export default function MeusEventos() {
                         type="button"
                         onClick={() => setSelectedEvent(event)}
                         style={{
-                          ...styles.eventItem,
-                          ...(isActive ? styles.eventItemActive : {}),
+                          ...styles.eventListButton,
+                          ...(isActive ? styles.eventListButtonActive : {}),
                         }}
                       >
-                        <div style={styles.eventItemTop}>
-                          <strong style={styles.eventName}>
+                        <div style={styles.eventListTop}>
+                          <strong style={styles.eventListTitle}>
                             {event.name || "Evento sem nome"}
                           </strong>
-
-                          <span
-                            style={{
-                              ...styles.statusBadge,
-                              ...(event.is_upload_open
-                                ? styles.statusOpen
-                                : styles.statusClosed),
-                            }}
-                          >
-                            {event.is_upload_open ? "Upload aberto" : "Fechado"}
+                          <span style={styles.eventListDate}>
+                            {formatDate(event.event_date)}
                           </span>
                         </div>
 
-                        <div style={styles.eventMeta}>
-                          <span>{event.slug || "sem-slug"}</span>
-                          <span>•</span>
-                          <span>{formatDate(event.event_date)}</span>
+                        <div style={styles.eventListMeta}>
+                          <span>
+                            {event.is_upload_open ? "Upload aberto" : "Upload fechado"}
+                          </span>
+                          <span>
+                            {event.event_settings?.gallery_mode === "public"
+                              ? "Pública"
+                              : "Privada"}
+                          </span>
                         </div>
                       </button>
                     );
@@ -510,88 +721,87 @@ export default function MeusEventos() {
               <div style={styles.panelHeader}>
                 <p style={styles.kicker}>Evento selecionado</p>
                 <h2 style={styles.panelTitle}>
-                  {selectedEvent?.name || "Nenhum evento selecionado"}
+                  {selectedEvent?.name || "Selecione um evento"}
                 </h2>
               </div>
 
               {!selectedEvent ? (
                 <p style={styles.emptyText}>
-                  Selecione um evento para visualizar os detalhes.
+                  Escolha um evento para visualizar os detalhes.
                 </p>
               ) : (
                 <>
                   <div
                     style={{
-                      ...styles.infoGrid,
-                      ...(isMobile ? styles.infoGridMobile : {}),
+                      ...styles.eventHero,
+                      backgroundImage: selectedEvent.cover_url
+                        ? `linear-gradient(rgba(19,24,42,.45), rgba(19,24,42,.58)), url(${selectedEvent.cover_url})`
+                        : "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
                     }}
                   >
-                    <InfoBox label="Slug" value={selectedEvent.slug} />
-                    <InfoBox
-                      label="Data"
-                      value={formatDate(selectedEvent.event_date)}
-                    />
-                    <InfoBox
-                      label="Upload"
-                      value={selectedEvent.is_upload_open ? "Aberto" : "Fechado"}
-                    />
-                    <InfoBox
-                      label="Modo da galeria"
-                      value={
-                        selectedEvent.event_settings?.gallery_mode === "public"
-                          ? "Pública"
-                          : "Privada"
-                      }
-                    />
-                    <InfoBox
-                      label="Vídeos"
-                      value={
-                        selectedEvent.event_settings?.allow_videos
-                          ? "Permitidos"
-                          : "Bloqueados"
-                      }
-                    />
-                    <InfoBox
-                      label="Nome do convidado"
-                      value={
-                        selectedEvent.event_settings?.require_guest_name
-                          ? "Obrigatório"
-                          : "Opcional"
-                      }
-                    />
+                    <div style={styles.eventHeroOverlay}>
+                      <div style={styles.eventHeroTags}>
+                        <span style={styles.eventHeroTag}>
+                          {selectedEvent.is_upload_open
+                            ? "Upload aberto"
+                            : "Upload fechado"}
+                        </span>
+                        <span style={styles.eventHeroTag}>
+                          {selectedEvent.event_settings?.gallery_mode === "public"
+                            ? "Galeria pública"
+                            : "Galeria privada"}
+                        </span>
+                      </div>
+
+                      <p style={styles.eventHeroDate}>
+                        {formatDate(selectedEvent.event_date)}
+                      </p>
+
+                      <p style={styles.eventHeroDescription}>
+                        {selectedEvent.description ||
+                          "Sem descrição cadastrada para este evento."}
+                      </p>
+                    </div>
                   </div>
 
                   <div
                     style={{
-                      ...styles.linksGrid,
-                      ...(isMobile ? styles.linksGridMobile : {}),
+                      ...styles.linkGrid,
+                      ...(isMobile ? styles.linkGridMobile : {}),
                     }}
                   >
-                    <LinkCard
-                      title="Link de upload"
-                      icon={<Link2 size={16} />}
-                      url={selectedLinks.uploadUrl}
-                      onCopy={() => copyText(selectedLinks.uploadUrl, "upload")}
-                      copied={copiedKey === "upload"}
-                    />
-
-                    <LinkCard
-                      title="Galeria privada"
+                    <ActionLink
+                      href={selectedLinks.uploadUrl}
                       icon={<ExternalLink size={16} />}
-                      url={selectedLinks.privateGalleryUrl}
-                      onCopy={() =>
-                        copyText(selectedLinks.privateGalleryUrl, "private")
-                      }
-                      copied={copiedKey === "private"}
+                      title="Página de upload"
+                      subtitle="Abra a página usada pelos convidados"
                     />
-
-                    <LinkCard
-                      title="Galeria pública"
+                    <ActionLink
+                      href={selectedLinks.privateGalleryUrl}
+                      icon={<ImageIcon size={16} />}
+                      title="Galeria privada"
+                      subtitle="Acesse a galeria restrita do evento"
+                    />
+                    <ActionLink
+                      href={selectedLinks.publicGalleryUrl}
                       icon={<Globe size={16} />}
-                      url={selectedLinks.publicGalleryUrl}
-                      onCopy={() => copyText(selectedLinks.publicGalleryUrl, "public")}
-                      copied={copiedKey === "public"}
+                      title="Galeria pública"
+                      subtitle="Visualize a versão pública do evento"
                     />
+                    <Link
+                      to={`/meus-eventos/${selectedEvent.slug}`}
+                      style={styles.actionTile}
+                    >
+                      <Settings size={16} />
+                      <div>
+                        <strong style={styles.actionTileTitle}>
+                          Ver detalhes
+                        </strong>
+                        <span style={styles.actionTileText}>
+                          Abrir painel detalhado deste evento
+                        </span>
+                      </div>
+                    </Link>
                   </div>
                 </>
               )}
@@ -606,7 +816,7 @@ export default function MeusEventos() {
               <div style={styles.panelCard}>
                 <div style={styles.panelHeader}>
                   <p style={styles.kicker}>QR Code</p>
-                  <h2 style={styles.panelTitle}>Compartilhamento rápido</h2>
+                  <h2 style={styles.panelTitle}>Compartilhe com convidados</h2>
                 </div>
 
                 {!selectedEvent ? (
@@ -615,31 +825,28 @@ export default function MeusEventos() {
                   </p>
                 ) : (
                   <>
-                    <div style={styles.qrPreview}>
+                    <div style={styles.qrCard}>
                       {qrCodeDataUrl ? (
                         <img
                           src={qrCodeDataUrl}
-                          alt="QR Code do evento"
+                          alt={`QR Code do evento ${selectedEvent.name}`}
                           style={styles.qrImage}
                         />
                       ) : (
                         <div style={styles.qrPlaceholder}>
-                          <QrCode size={30} />
-                          <span>Gerando QR Code...</span>
+                          <QrCode size={42} />
                         </div>
                       )}
                     </div>
 
-                    <div style={styles.actionRow}>
+                    <div style={styles.qrActions}>
                       <button
                         type="button"
-                        onClick={() =>
-                          copyText(selectedLinks.uploadUrl, "qrcode-link")
-                        }
+                        onClick={() => copyText(selectedLinks.uploadUrl, "upload")}
                         style={styles.secondaryButton}
                       >
-                        <Copy size={16} />
-                        {copiedKey === "qrcode-link" ? "Copiado!" : "Copiar link"}
+                        <Copy size={15} />
+                        {copiedKey === "upload" ? "Copiado!" : "Copiar link"}
                       </button>
 
                       <button
@@ -647,7 +854,7 @@ export default function MeusEventos() {
                         onClick={downloadQr}
                         style={styles.secondaryButton}
                       >
-                        <Download size={16} />
+                        <Download size={15} />
                         Baixar QR
                       </button>
                     </div>
@@ -657,62 +864,225 @@ export default function MeusEventos() {
 
               <div style={styles.panelCard}>
                 <div style={styles.panelHeader}>
-                  <p style={styles.kicker}>Ações rápidas</p>
-                  <h2 style={styles.panelTitle}>Acesso direto</h2>
+                  <p style={styles.kicker}>Links rápidos</p>
+                  <h2 style={styles.panelTitle}>Ações úteis</h2>
                 </div>
 
                 {!selectedEvent ? (
                   <p style={styles.emptyText}>
-                    Selecione um evento para exibir os atalhos.
+                    Selecione um evento para visualizar os links.
                   </p>
                 ) : (
-                  <div style={styles.quickActions}>
-                    <a
-                      href={selectedLinks.uploadUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.primaryLinkButton}
-                    >
-                      <ExternalLink size={16} />
-                      Abrir upload
-                    </a>
-
-                    <Link
-                      to={`/evento/${selectedEvent.slug}/galeria`}
-                      style={styles.secondaryLinkButton}
-                    >
-                      <ImageIcon size={16} />
-                      Galeria privada
-                    </Link>
-
-                    <Link
-                      to={`/evento/${selectedEvent.slug}/configuracoes`}
-                      style={styles.secondaryLinkButton}
-                    >
-                      <Settings size={16} />
-                      Configurações
-                    </Link>
-
-                    <a
-                      href={selectedLinks.publicGalleryUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.secondaryLinkButton}
-                    >
-                      <Globe size={16} />
-                      Galeria pública
-                    </a>
-
-                    <Link
-                      to={`/meus-eventos/${selectedEvent.slug}`}
-                      style={styles.secondaryLinkButton}
-                    >
-                      <Camera size={16} />
-                      Detalhes do evento
-                    </Link>
+                  <div style={styles.linkList}>
+                    <LinkRow
+                      label="Upload"
+                      value={selectedLinks.uploadUrl}
+                      copiedKey={copiedKey}
+                      copyId="upload2"
+                      onCopy={copyText}
+                    />
+                    <LinkRow
+                      label="Galeria privada"
+                      value={selectedLinks.privateGalleryUrl}
+                      copiedKey={copiedKey}
+                      copyId="private"
+                      onCopy={copyText}
+                    />
+                    <LinkRow
+                      label="Galeria pública"
+                      value={selectedLinks.publicGalleryUrl}
+                      copiedKey={copiedKey}
+                      copyId="public"
+                      onCopy={copyText}
+                    />
                   </div>
                 )}
               </div>
+            </div>
+
+            <div style={styles.panelCardLarge}>
+              <div
+                style={{
+                  ...styles.panelHeader,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <p style={styles.kicker}>Filmes do evento</p>
+                  <h2 style={styles.panelTitle}>Vídeos gerados</h2>
+                </div>
+
+                {selectedEvent ? (
+                  <div style={styles.filmToolbar}>
+                    <label style={styles.durationLabel}>
+                      Duração
+                      <select
+                        value={selectedFilmDuration}
+                        onChange={(event) =>
+                          setSelectedFilmDuration(Number(event.target.value))
+                        }
+                        style={styles.durationSelect}
+                        disabled={generatingFilm || hasProcessingFilm}
+                      >
+                        {FILM_DURATION_OPTIONS.map((duration) => (
+                          <option key={duration} value={duration}>
+                            {duration}s
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={handleGenerateFilm}
+                      disabled={generatingFilm || hasProcessingFilm}
+                      style={{
+                        ...styles.primaryButtonDark,
+                        opacity: generatingFilm || hasProcessingFilm ? 0.6 : 1,
+                        cursor:
+                          generatingFilm || hasProcessingFilm
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      <Video size={16} />
+                      {generatingFilm
+                        ? "Gerando filme..."
+                        : hasProcessingFilm
+                        ? "Filme em processamento"
+                        : "Gerar filme"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              {!selectedEvent ? (
+                <p style={styles.emptyText}>
+                  Selecione um evento para visualizar os filmes.
+                </p>
+              ) : loadingFilms ? (
+                <p style={styles.emptyText}>Carregando filmes do evento...</p>
+              ) : featuredFilms.length === 0 ? (
+                <p style={styles.emptyText}>
+                  Este evento ainda não possui filme gerado.
+                </p>
+              ) : (
+                <div
+                  style={{
+                    ...styles.filmGrid,
+                    ...(isMobile ? styles.filmGridMobile : {}),
+                  }}
+                >
+                  {featuredFilms.map((film) => {
+                    const outputUrl = getFilmOutputUrl(film);
+                    const filmPreviewList = getFilmPreviewItems(film.id);
+                    const firstPreview = filmPreviewList[0];
+                    const previewUrl = getPublicMediaUrl(firstPreview?.media_path);
+
+                    return (
+                      <div key={film.id} style={styles.filmCard}>
+                        <div style={styles.filmPreviewWrap}>
+                          {outputUrl ? (
+                            <video
+                              src={outputUrl}
+                              style={styles.filmVideo}
+                              controls
+                              preload="metadata"
+                            />
+                          ) : previewUrl ? (
+                            <video
+                              src={previewUrl}
+                              style={styles.filmVideo}
+                              controls
+                              preload="metadata"
+                            />
+                          ) : (
+                            <div style={styles.filmFallback}>
+                              <PlayCircle size={34} />
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={styles.filmBody}>
+                          <div style={styles.filmTopLine}>
+                            <strong style={styles.filmTitle}>
+                              {film.title || "Filme do evento"}
+                            </strong>
+                            <span
+                              style={{
+                                ...styles.filmStatusBadge,
+                                ...(String(film.status || "")
+                                  .toLowerCase()
+                                  .includes("error")
+                                  ? styles.filmStatusError
+                                  : String(film.status || "")
+                                      .toLowerCase()
+                                      .includes("process")
+                                  ? styles.filmStatusPending
+                                  : styles.filmStatusReady),
+                              }}
+                            >
+                              {getFilmStatusLabel(film.status)}
+                            </span>
+                          </div>
+
+                          <div style={styles.filmMetaRow}>
+                            <span>{film.style || "Estilo padrão"}</span>
+                            <span>
+                              {film.duration_seconds
+                                ? `${film.duration_seconds}s`
+                                : "Duração não informada"}
+                            </span>
+                            <span>{film.format || "Formato padrão"}</span>
+                          </div>
+
+                          {film.error_message ? (
+                            <p style={styles.filmErrorText}>{film.error_message}</p>
+                          ) : null}
+
+                          {filmPreviewList.length > 0 ? (
+                            <div style={styles.previewStrip}>
+                              {filmPreviewList.slice(0, 4).map((item) => {
+                                const itemUrl = getPublicMediaUrl(item.media_path);
+                                return itemUrl ? (
+                                  <video
+                                    key={item.id}
+                                    src={itemUrl}
+                                    style={styles.previewThumb}
+                                    muted
+                                    playsInline
+                                    preload="metadata"
+                                  />
+                                ) : (
+                                  <div key={item.id} style={styles.previewThumbFallback}>
+                                    <Video size={16} />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+
+                          {outputUrl ? (
+                            <a
+                              href={outputUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={styles.primaryLinkInline}
+                            >
+                              <PlayCircle size={16} />
+                              Abrir filme
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </section>
         </section>
@@ -724,79 +1094,74 @@ export default function MeusEventos() {
 function StatCard({ icon, value, label }) {
   return (
     <div style={styles.statCard}>
-      <div style={styles.statIconWrap}>{icon}</div>
+      <div style={styles.statIcon}>{icon}</div>
+      <div style={styles.statValue}>{value}</div>
+      <div style={styles.statLabel}>{label}</div>
+    </div>
+  );
+}
+
+function ActionLink({ href, icon, title, subtitle }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" style={styles.actionTile}>
+      {icon}
       <div>
-        <div style={styles.statValue}>{value}</div>
-        <div style={styles.statLabel}>{label}</div>
+        <strong style={styles.actionTileTitle}>{title}</strong>
+        <span style={styles.actionTileText}>{subtitle}</span>
       </div>
+    </a>
+  );
+}
+
+function LinkRow({ label, value, copiedKey, copyId, onCopy }) {
+  return (
+    <div style={styles.linkRow}>
+      <div style={{ minWidth: 0 }}>
+        <div style={styles.linkRowLabel}>{label}</div>
+        <div style={styles.linkRowValue}>{value || "—"}</div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onCopy(value, copyId)}
+        style={styles.iconButton}
+        disabled={!value}
+      >
+        {copiedKey === copyId ? <CheckIcon /> : <Link2 size={15} />}
+      </button>
     </div>
   );
 }
 
-function InfoBox({ label, value }) {
-  return (
-    <div style={styles.infoBox}>
-      <span style={styles.infoLabel}>{label}</span>
-      <strong style={styles.infoValue}>{value || "—"}</strong>
-    </div>
-  );
-}
-
-function LinkCard({ title, icon, url, onCopy, copied }) {
-  return (
-    <div style={styles.linkCard}>
-      <div style={styles.linkCardTitle}>
-        <span style={styles.linkIcon}>{icon}</span>
-        <strong>{title}</strong>
-      </div>
-
-      <div style={styles.linkUrl}>{url || "—"}</div>
-
-      <div style={styles.linkActions}>
-        <button type="button" onClick={onCopy} style={styles.secondaryButton}>
-          <Copy size={16} />
-          {copied ? "Copiado!" : "Copiar"}
-        </button>
-
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          style={styles.secondaryLinkButton}
-        >
-          <ExternalLink size={16} />
-          Abrir
-        </a>
-      </div>
-    </div>
-  );
+function CheckIcon() {
+  return <span style={{ fontSize: 13, fontWeight: 800 }}>OK</span>;
 }
 
 const styles = {
   page: {
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(240,210,170,0.18), transparent 25%), radial-gradient(circle at bottom right, rgba(176,137,104,0.16), transparent 22%), linear-gradient(180deg, #f7f5f2 0%, #f3eee7 100%)",
+      "radial-gradient(circle at top left, rgba(240,210,170,0.18), transparent 25%), radial-gradient(circle at bottom right, rgba(176,137,104,0.14), transparent 22%), linear-gradient(180deg, #f7f5f2 0%, #f4f0ea 100%)",
     position: "relative",
     overflow: "hidden",
   },
   glowOne: {
     position: "absolute",
     top: "-120px",
-    right: "-120px",
+    left: "-120px",
     width: "320px",
     height: "320px",
     borderRadius: "50%",
-    background: "rgba(176,137,104,0.14)",
+    background: "rgba(176,137,104,0.12)",
     filter: "blur(60px)",
     pointerEvents: "none",
   },
   glowTwo: {
     position: "absolute",
-    bottom: "-100px",
-    left: "-90px",
-    width: "300px",
-    height: "300px",
+    right: "-120px",
+    bottom: "-120px",
+    width: "340px",
+    height: "340px",
     borderRadius: "50%",
     background: "rgba(30,36,64,0.08)",
     filter: "blur(70px)",
@@ -806,13 +1171,13 @@ const styles = {
     minHeight: "100vh",
     display: "grid",
     placeItems: "center",
-    background: "linear-gradient(180deg, #f7f5f2 0%, #f4f0ea 100%)",
     padding: "24px",
+    background: "linear-gradient(180deg, #f7f5f2 0%, #f4f0ea 100%)",
   },
   loadingCard: {
     width: "100%",
     maxWidth: "440px",
-    background: "rgba(255,255,255,0.75)",
+    background: "rgba(255,255,255,0.76)",
     backdropFilter: "blur(12px)",
     border: "1px solid rgba(255,255,255,0.65)",
     borderRadius: "28px",
@@ -829,7 +1194,6 @@ const styles = {
     color: "#fff",
     display: "grid",
     placeItems: "center",
-    boxShadow: "0 12px 30px rgba(30,36,64,0.22)",
   },
   loadingTitle: {
     margin: "0 0 10px",
@@ -851,12 +1215,13 @@ const styles = {
     gap: "16px",
     padding: "20px 28px",
     backdropFilter: "blur(18px)",
-    background: "rgba(247,245,242,0.74)",
+    background: "rgba(247,245,242,0.72)",
     borderBottom: "1px solid rgba(30,36,64,0.08)",
   },
   headerMobile: {
     padding: "16px",
-    flexWrap: "wrap",
+    flexDirection: "column",
+    alignItems: "stretch",
   },
   headerBrand: {
     display: "flex",
@@ -884,7 +1249,7 @@ const styles = {
     marginTop: "2px",
   },
   logoutButton: {
-    minHeight: "44px",
+    height: "44px",
     borderRadius: "14px",
     border: "1px solid rgba(30,36,64,0.08)",
     background: "#fff",
@@ -895,7 +1260,7 @@ const styles = {
     gap: "8px",
     cursor: "pointer",
     fontWeight: 700,
-    padding: "10px 16px",
+    padding: "0 16px",
     boxShadow: "0 8px 22px rgba(24,32,79,0.06)",
   },
   main: {
@@ -908,12 +1273,12 @@ const styles = {
   },
   alert: {
     marginBottom: "18px",
-    background: "#fff4e8",
+    background: "#fff7e6",
     color: "#8a5a00",
     border: "1px solid #efd7b5",
     borderRadius: "16px",
     padding: "14px 16px",
-    boxShadow: "0 10px 24px rgba(138,90,0,0.06)",
+    boxShadow: "0 10px 24px rgba(24,32,79,0.06)",
   },
   hero: {
     display: "flex",
@@ -924,14 +1289,13 @@ const styles = {
     background:
       "linear-gradient(135deg, rgba(30,36,64,0.98) 0%, rgba(52,64,109,0.96) 100%)",
     borderRadius: "30px",
-    padding: "30px",
+    padding: "28px",
     color: "#fff",
     boxShadow: "0 18px 50px rgba(30,36,64,0.18)",
     marginBottom: "22px",
   },
   heroMobile: {
     padding: "22px",
-    borderRadius: "24px",
   },
   heroContent: {
     maxWidth: "760px",
@@ -940,28 +1304,30 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     gap: "8px",
+    minHeight: "34px",
+    padding: "0 12px",
     borderRadius: "999px",
-    padding: "8px 14px",
     background: "rgba(255,255,255,0.12)",
-    color: "#f1d9b0",
-    fontWeight: 700,
-    fontSize: "12px",
-    marginBottom: "14px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#f3d5ab",
+    fontSize: "13px",
+    fontWeight: 800,
+    marginBottom: "16px",
   },
   heroTitle: {
     margin: "0 0 12px",
-    fontSize: "38px",
-    lineHeight: 1.08,
+    fontSize: "40px",
+    lineHeight: 1.1,
   },
   heroTitleMobile: {
-    fontSize: "28px",
+    fontSize: "30px",
   },
   heroText: {
     margin: 0,
+    maxWidth: "700px",
     color: "rgba(255,255,255,0.82)",
     fontSize: "15px",
     lineHeight: 1.7,
-    maxWidth: "720px",
   },
   heroActions: {
     display: "flex",
@@ -969,22 +1335,58 @@ const styles = {
     flexWrap: "wrap",
   },
   primaryButton: {
-    minHeight: "46px",
+    height: "48px",
     border: "none",
     borderRadius: "14px",
     background: "#fff",
-    color: "#1f2333",
+    color: "#1e2440",
+    fontWeight: 800,
+    cursor: "pointer",
     padding: "0 18px",
+  },
+  primaryButtonDark: {
+    minHeight: "46px",
+    border: "none",
+    borderRadius: "14px",
+    background: "linear-gradient(135deg, #1e2440 0%, #33406b 100%)",
+    color: "#fff",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    gap: "8px",
     fontWeight: 800,
-    cursor: "pointer",
-    boxShadow: "0 12px 24px rgba(255,255,255,0.12)",
+    padding: "0 16px",
+  },
+  filmToolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+  durationLabel: {
+    display: "grid",
+    gap: "6px",
+    color: "#5e6579",
+    fontSize: "12px",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: ".04em",
+  },
+  durationSelect: {
+    height: "44px",
+    minWidth: "110px",
+    borderRadius: "14px",
+    border: "1px solid #dfe3ec",
+    background: "#fff",
+    color: "#1f2333",
+    padding: "0 12px",
+    fontSize: "14px",
+    fontWeight: 700,
+    outline: "none",
   },
   dashboardGrid: {
     display: "grid",
-    gridTemplateColumns: "380px minmax(0, 1fr)",
+    gridTemplateColumns: "360px minmax(0, 1fr)",
     gap: "20px",
     alignItems: "start",
   },
@@ -1011,38 +1413,38 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "14px",
-    marginBottom: "16px",
+    marginBottom: "14px",
   },
   avatar: {
-    width: "72px",
-    height: "72px",
+    width: "74px",
+    height: "74px",
     borderRadius: "50%",
     objectFit: "cover",
     border: "3px solid rgba(255,255,255,0.9)",
-    boxShadow: "0 10px 22px rgba(24,32,79,0.12)",
+    boxShadow: "0 10px 24px rgba(24,32,79,0.12)",
+    flexShrink: 0,
   },
   avatarFallback: {
-    width: "72px",
-    height: "72px",
+    width: "74px",
+    height: "74px",
     borderRadius: "50%",
     display: "grid",
     placeItems: "center",
     background: "linear-gradient(135deg, #1e2440 0%, #34406d 100%)",
     color: "#fff",
-    boxShadow: "0 10px 22px rgba(24,32,79,0.12)",
     fontSize: "28px",
     fontWeight: 800,
+    flexShrink: 0,
   },
   profileName: {
     fontSize: "19px",
     fontWeight: 800,
     color: "#1f2333",
-    lineHeight: 1.2,
   },
   profileEmail: {
+    fontSize: "14px",
+    color: "#6f768c",
     marginTop: "4px",
-    fontSize: "13px",
-    color: "#6f768b",
     wordBreak: "break-word",
   },
   profileActions: {
@@ -1051,9 +1453,9 @@ const styles = {
     flexWrap: "wrap",
   },
   profileActionButton: {
-    minHeight: "40px",
+    minHeight: "42px",
     borderRadius: "14px",
-    border: "1px solid #e1ddd6",
+    border: "1px solid #e3e7f0",
     background: "#fff",
     color: "#29314d",
     display: "inline-flex",
@@ -1062,7 +1464,7 @@ const styles = {
     gap: "8px",
     textDecoration: "none",
     fontWeight: 700,
-    padding: "0 14px",
+    padding: "0 16px",
   },
   statsGrid: {
     display: "grid",
@@ -1070,38 +1472,35 @@ const styles = {
     gap: "14px",
   },
   statsGridMobile: {
-    gridTemplateColumns: "1fr",
+    gridTemplateColumns: "1fr 1fr",
   },
   statCard: {
-    background: "rgba(255,255,255,0.82)",
+    background: "rgba(255,255,255,0.78)",
     border: "1px solid rgba(30,36,64,0.08)",
     borderRadius: "22px",
     padding: "18px",
-    boxShadow: "0 14px 34px rgba(24,32,79,0.06)",
-    display: "flex",
-    alignItems: "center",
-    gap: "14px",
+    boxShadow: "0 12px 28px rgba(24,32,79,0.06)",
   },
-  statIconWrap: {
-    width: "46px",
-    height: "46px",
-    borderRadius: "15px",
-    background: "linear-gradient(135deg, #f0dfc6 0%, #edd0a9 100%)",
-    color: "#5e4632",
+  statIcon: {
+    width: "42px",
+    height: "42px",
+    borderRadius: "14px",
     display: "grid",
     placeItems: "center",
-    flexShrink: 0,
+    background: "#f2e4d2",
+    color: "#6a5139",
+    marginBottom: "12px",
   },
   statValue: {
     fontSize: "28px",
     fontWeight: 800,
     color: "#1f2333",
     lineHeight: 1,
-    marginBottom: "6px",
+    marginBottom: "8px",
   },
   statLabel: {
-    fontSize: "13px",
     color: "#71788c",
+    fontSize: "13px",
   },
   panelCard: {
     background: "rgba(255,255,255,0.78)",
@@ -1112,11 +1511,11 @@ const styles = {
     boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
   },
   panelCardLarge: {
-    background: "rgba(255,255,255,0.82)",
+    background: "rgba(255,255,255,0.78)",
     backdropFilter: "blur(14px)",
     border: "1px solid rgba(30,36,64,0.08)",
     borderRadius: "30px",
-    padding: "24px",
+    padding: "22px",
     boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
   },
   panelHeader: {
@@ -1145,173 +1544,165 @@ const styles = {
     display: "grid",
     gap: "12px",
   },
-  eventItem: {
+  eventListButton: {
     width: "100%",
-    border: "1px solid #ebe9e3",
-    borderRadius: "18px",
-    background: "#fbfaf8",
-    padding: "16px",
-    cursor: "pointer",
     textAlign: "left",
-    transition: "all .2s ease",
+    border: "1px solid #e4e8f0",
+    background: "#fff",
+    borderRadius: "18px",
+    padding: "14px 15px",
+    cursor: "pointer",
   },
-  eventItemActive: {
-    border: "1px solid #d8b98d",
-    background: "#fff6eb",
-    boxShadow: "0 12px 26px rgba(176,137,104,0.12)",
+  eventListButtonActive: {
+    border: "1px solid rgba(30,36,64,0.22)",
+    background: "linear-gradient(135deg, #f8f6f2 0%, #f3efe9 100%)",
+    boxShadow: "0 10px 22px rgba(24,32,79,0.08)",
   },
-  eventItemTop: {
+  eventListTop: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
     gap: "10px",
-    flexWrap: "wrap",
+    alignItems: "flex-start",
     marginBottom: "8px",
   },
-  eventName: {
+  eventListTitle: {
     color: "#1f2333",
     fontSize: "15px",
   },
-  statusBadge: {
-    minHeight: "28px",
+  eventListDate: {
+    color: "#6f768c",
+    fontSize: "12px",
+    whiteSpace: "nowrap",
+  },
+  eventListMeta: {
+    display: "flex",
+    gap: "8px",
+    flexWrap: "wrap",
+    fontSize: "12px",
+    color: "#7d8497",
+  },
+  eventHero: {
+    minHeight: "250px",
+    borderRadius: "26px",
+    overflow: "hidden",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    boxShadow: "0 18px 40px rgba(24,32,79,0.12)",
+    marginBottom: "18px",
+  },
+  eventHeroOverlay: {
+    width: "100%",
+    height: "100%",
+    minHeight: "250px",
+    padding: "24px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "flex-end",
+  },
+  eventHeroTags: {
+    display: "flex",
+    gap: "8px",
+    flexWrap: "wrap",
+    marginBottom: "12px",
+  },
+  eventHeroTag: {
+    minHeight: "30px",
+    padding: "0 12px",
     borderRadius: "999px",
-    padding: "4px 12px",
     display: "inline-flex",
     alignItems: "center",
-    justifyContent: "center",
+    background: "rgba(255,255,255,0.14)",
+    color: "#fff",
     fontSize: "12px",
     fontWeight: 700,
+    border: "1px solid rgba(255,255,255,0.16)",
   },
-  statusOpen: {
-    background: "#e7f7ef",
-    color: "#257549",
-  },
-  statusClosed: {
-    background: "#f3f3f5",
-    color: "#777f90",
-  },
-  eventMeta: {
-    display: "flex",
-    gap: "8px",
-    flexWrap: "wrap",
+  eventHeroDate: {
+    margin: "0 0 10px",
+    color: "#f0d7b5",
+    fontWeight: 800,
     fontSize: "13px",
-    color: "#747c90",
   },
-  infoGrid: {
+  eventHeroDescription: {
+    margin: 0,
+    color: "rgba(255,255,255,0.88)",
+    lineHeight: 1.6,
+    maxWidth: "720px",
+  },
+  linkGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: "12px",
-    marginBottom: "16px",
-  },
-  infoGridMobile: {
-    gridTemplateColumns: "1fr",
-  },
-  infoBox: {
-    background: "#f8f6f2",
-    border: "1px solid #eee9e1",
-    borderRadius: "16px",
-    padding: "12px 14px",
-  },
-  infoLabel: {
-    display: "block",
-    fontSize: "11px",
-    color: "#8a90a3",
-    textTransform: "uppercase",
-    letterSpacing: ".06em",
-    marginBottom: "5px",
-  },
-  infoValue: {
-    color: "#23283a",
-    fontSize: "14px",
-    wordBreak: "break-word",
-  },
-  linksGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: "14px",
   },
-  linksGridMobile: {
+  linkGridMobile: {
     gridTemplateColumns: "1fr",
   },
-  linkCard: {
-    background: "#f8f6f2",
-    border: "1px solid #eee9e1",
-    borderRadius: "18px",
-    padding: "14px",
-  },
-  linkCardTitle: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    marginBottom: "10px",
-    color: "#1f2333",
-    flexWrap: "wrap",
-  },
-  linkIcon: {
-    display: "inline-flex",
-    color: "#b08968",
-  },
-  linkUrl: {
+  actionTile: {
+    minHeight: "92px",
+    borderRadius: "20px",
+    border: "1px solid #e4e8f0",
     background: "#fff",
-    border: "1px solid #ece8e0",
-    borderRadius: "14px",
-    padding: "10px 12px",
-    fontSize: "13px",
-    color: "#49516a",
-    wordBreak: "break-word",
-    marginBottom: "10px",
-  },
-  linkActions: {
+    padding: "16px",
     display: "flex",
-    gap: "10px",
-    flexWrap: "wrap",
+    gap: "12px",
+    alignItems: "flex-start",
+    textDecoration: "none",
+    color: "#1f2333",
+  },
+  actionTileTitle: {
+    display: "block",
+    fontSize: "15px",
+    marginBottom: "5px",
+  },
+  actionTileText: {
+    display: "block",
+    fontSize: "13px",
+    color: "#6f768c",
+    lineHeight: 1.5,
   },
   secondaryGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.1fr)",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: "20px",
-    alignItems: "start",
   },
   secondaryGridMobile: {
     gridTemplateColumns: "1fr",
   },
-  qrPreview: {
+  qrCard: {
     background: "#fff",
-    border: "1px solid #ece8e0",
-    borderRadius: "20px",
-    minHeight: "260px",
+    border: "1px solid #e7eaf2",
+    borderRadius: "22px",
+    padding: "18px",
     display: "grid",
     placeItems: "center",
-    padding: "14px",
-    marginBottom: "12px",
+    minHeight: "260px",
   },
   qrImage: {
     width: "100%",
-    maxWidth: "230px",
-    height: "auto",
+    maxWidth: "260px",
     display: "block",
+    borderRadius: "18px",
   },
   qrPlaceholder: {
+    width: "100%",
+    maxWidth: "220px",
+    aspectRatio: "1 / 1",
+    borderRadius: "18px",
+    background: "#f4f6fb",
     display: "grid",
-    gap: "10px",
     placeItems: "center",
-    color: "#7a8091",
-    fontSize: "14px",
-    textAlign: "center",
+    color: "#8b93a8",
   },
-  actionRow: {
+  qrActions: {
     display: "flex",
     gap: "10px",
     flexWrap: "wrap",
-  },
-  quickActions: {
-    display: "grid",
-    gap: "12px",
+    marginTop: "14px",
   },
   secondaryButton: {
-    minHeight: "42px",
-    border: "1px solid #e1ddd6",
+    minHeight: "44px",
     borderRadius: "14px",
+    border: "1px solid #dfe3ec",
     background: "#fff",
     color: "#29314d",
     display: "inline-flex",
@@ -1320,36 +1711,164 @@ const styles = {
     gap: "8px",
     cursor: "pointer",
     fontWeight: 700,
-    padding: "10px 14px",
-    textDecoration: "none",
+    padding: "0 16px",
   },
-  primaryLinkButton: {
-    minHeight: "44px",
-    border: "none",
+  linkList: {
+    display: "grid",
+    gap: "10px",
+  },
+  linkRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: "10px",
+    alignItems: "center",
+    background: "#fff",
+    border: "1px solid #e7eaf2",
+    borderRadius: "16px",
+    padding: "12px 14px",
+  },
+  linkRowLabel: {
+    fontSize: "12px",
+    color: "#8a90a3",
+    textTransform: "uppercase",
+    letterSpacing: ".05em",
+    marginBottom: "4px",
+  },
+  linkRowValue: {
+    fontSize: "13px",
+    color: "#23283a",
+    wordBreak: "break-word",
+  },
+  iconButton: {
+    width: "38px",
+    height: "38px",
+    borderRadius: "12px",
+    border: "1px solid #dfe3ec",
+    background: "#fff",
+    color: "#29314d",
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+  },
+  filmGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "18px",
+  },
+  filmGridMobile: {
+    gridTemplateColumns: "1fr",
+  },
+  filmCard: {
+    borderRadius: "24px",
+    overflow: "hidden",
+    background: "#fff",
+    border: "1px solid rgba(30,36,64,0.08)",
+    boxShadow: "0 12px 28px rgba(24,32,79,0.08)",
+  },
+  filmPreviewWrap: {
+    position: "relative",
+    background: "#eef1f7",
+    minHeight: "240px",
+  },
+  filmVideo: {
+    width: "100%",
+    height: "100%",
+    minHeight: "240px",
+    objectFit: "cover",
+    display: "block",
+    background: "#111",
+  },
+  filmFallback: {
+    width: "100%",
+    minHeight: "240px",
+    display: "grid",
+    placeItems: "center",
+    color: "#34406d",
+    background: "linear-gradient(135deg, #eef1f7 0%, #e4e9f5 100%)",
+  },
+  filmBody: {
+    padding: "16px",
+    display: "grid",
+    gap: "10px",
+  },
+  filmTopLine: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    alignItems: "flex-start",
+  },
+  filmTitle: {
+    color: "#1f2333",
+    fontSize: "16px",
+    lineHeight: 1.4,
+  },
+  filmStatusBadge: {
+    minHeight: "28px",
+    borderRadius: "999px",
+    padding: "0 10px",
+    display: "inline-flex",
+    alignItems: "center",
+    fontSize: "12px",
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+  },
+  filmStatusReady: {
+    background: "#e9f8ef",
+    color: "#257a45",
+  },
+  filmStatusPending: {
+    background: "#fff5e8",
+    color: "#996515",
+  },
+  filmStatusError: {
+    background: "#ffecec",
+    color: "#a13b3b",
+  },
+  filmMetaRow: {
+    display: "flex",
+    gap: "8px",
+    flexWrap: "wrap",
+    color: "#6f768c",
+    fontSize: "13px",
+  },
+  filmErrorText: {
+    margin: 0,
+    color: "#a13b3b",
+    fontSize: "13px",
+    lineHeight: 1.6,
+  },
+  previewStrip: {
+    display: "flex",
+    gap: "8px",
+    flexWrap: "wrap",
+  },
+  previewThumb: {
+    width: "74px",
+    height: "74px",
+    objectFit: "cover",
+    borderRadius: "12px",
+    background: "#111",
+  },
+  previewThumbFallback: {
+    width: "74px",
+    height: "74px",
+    borderRadius: "12px",
+    background: "#eef1f7",
+    display: "grid",
+    placeItems: "center",
+    color: "#7b8196",
+  },
+  primaryLinkInline: {
+    minHeight: "42px",
     borderRadius: "14px",
     background: "linear-gradient(135deg, #1e2440 0%, #33406b 100%)",
     color: "#fff",
     display: "inline-flex",
     alignItems: "center",
-    justifyContent: "center",
-    gap: "8px",
-    textDecoration: "none",
-    fontWeight: 800,
-    padding: "10px 16px",
-    boxShadow: "0 12px 24px rgba(30,36,64,0.16)",
-  },
-  secondaryLinkButton: {
-    minHeight: "42px",
-    border: "1px solid #e1ddd6",
-    borderRadius: "14px",
-    background: "#fff",
-    color: "#29314d",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
     gap: "8px",
     textDecoration: "none",
     fontWeight: 700,
-    padding: "10px 14px",
+    padding: "0 16px",
+    justifySelf: "start",
   },
 };

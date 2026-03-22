@@ -63,6 +63,10 @@ export default function EventSettings() {
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
+  const [screenWidth, setScreenWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1440
+  );
+
   const baseUrl =
     typeof window !== "undefined" ? window.location.origin : "";
 
@@ -86,6 +90,16 @@ export default function EventSettings() {
     loadPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  useEffect(() => {
+    function handleResize() {
+      setScreenWidth(window.innerWidth);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
 
   async function loadPage() {
     try {
@@ -425,6 +439,124 @@ export default function EventSettings() {
     });
   }
 
+
+  const responsive = useMemo(() => {
+    const isMobile = screenWidth <= 768;
+    const isTablet = screenWidth > 768 && screenWidth <= 1080;
+
+    if (isMobile) {
+      return {
+        header: {
+          flexDirection: "column",
+          alignItems: "stretch",
+          padding: "16px",
+        },
+        headerLeft: {
+          width: "100%",
+        },
+        headerRight: {
+          width: "100%",
+          flexDirection: "column",
+          alignItems: "stretch",
+        },
+        partnerBadge: {
+          width: "100%",
+        },
+        logoutButton: {
+          width: "100%",
+        },
+        main: {
+          padding: "16px",
+        },
+        heroCard: {
+          padding: "22px",
+        },
+        contentGrid: {
+          gridTemplateColumns: "1fr",
+        },
+        statsGrid: {
+          gridTemplateColumns: "1fr",
+        },
+        formGrid: {
+          gridTemplateColumns: "1fr",
+        },
+        actionsRow: {
+          flexDirection: "column",
+        },
+        primaryButton: {
+          width: "100%",
+        },
+        secondaryButton: {
+          width: "100%",
+        },
+        primaryLinkButton: {
+          width: "100%",
+        },
+        panelCard: {
+          padding: "18px",
+        },
+        brandTitle: {
+          fontSize: "16px",
+        },
+        panelTitle: {
+          fontSize: "22px",
+        },
+      };
+    }
+
+    if (isTablet) {
+      return {
+        header: {
+          padding: "18px 20px",
+        },
+        headerLeft: {},
+        headerRight: {},
+        partnerBadge: {},
+        logoutButton: {},
+        main: {
+          padding: "20px",
+        },
+        heroCard: {},
+        contentGrid: {
+          gridTemplateColumns: "1fr",
+        },
+        statsGrid: {
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+        },
+        formGrid: {
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        },
+        actionsRow: {},
+        primaryButton: {},
+        secondaryButton: {},
+        primaryLinkButton: {},
+        panelCard: {},
+        brandTitle: {},
+        panelTitle: {},
+      };
+    }
+
+    return {
+      header: {},
+      headerLeft: {},
+      headerRight: {},
+      partnerBadge: {},
+      logoutButton: {},
+      main: {},
+      heroCard: {},
+      contentGrid: {},
+      statsGrid: {},
+      formGrid: {},
+      actionsRow: {},
+      primaryButton: {},
+      secondaryButton: {},
+      primaryLinkButton: {},
+      panelCard: {},
+      brandTitle: {},
+      panelTitle: {},
+    };
+  }, [screenWidth]);
+
   if (authLoading) {
     return (
       <div style={styles.loadingScreen}>
@@ -464,22 +596,22 @@ export default function EventSettings() {
       <div style={styles.backgroundGlowTop} />
       <div style={styles.backgroundGlowBottom} />
 
-      <header style={styles.header}>
-        <div style={styles.headerLeft}>
+      <header style={{ ...styles.header, ...responsive.header }}>
+        <div style={{ ...styles.headerLeft, ...responsive.headerLeft }}>
           <div style={styles.brandIcon}>
             <Settings size={22} />
           </div>
 
           <div>
-            <div style={styles.brandTitle}>Configurações do Evento</div>
+            <div style={{ ...styles.brandTitle, ...responsive.brandTitle }}>Configurações do Evento</div>
             <div style={styles.brandSubtitle}>
               Painel premium L’Amour Galeria
             </div>
           </div>
         </div>
 
-        <div style={styles.headerRight}>
-          <div style={styles.partnerBadge}>
+        <div style={{ ...styles.headerRight, ...responsive.headerRight }}>
+          <div style={{ ...styles.partnerBadge, ...responsive.partnerBadge }}>
             <UserCircle2 size={18} />
             <div style={styles.partnerBadgeText}>
               <strong style={styles.partnerName}>{displayName}</strong>
@@ -490,7 +622,7 @@ export default function EventSettings() {
           <button
             type="button"
             onClick={handleLogout}
-            style={styles.logoutButton}
+            style={{ ...styles.logoutButton, ...responsive.logoutButton }}
           >
             <LogOut size={16} />
             Sair
@@ -498,7 +630,7 @@ export default function EventSettings() {
         </div>
       </header>
 
-      <main style={styles.main}>
+      <main style={{ ...styles.main, ...responsive.main }}>
         {message ? (
           <div style={{ ...styles.alert, ...styles.alertSuccess }}>
             {message}
@@ -511,7 +643,7 @@ export default function EventSettings() {
           </div>
         ) : null}
 
-        <section style={styles.heroCard}>
+        <section style={{ ...styles.heroCard, ...responsive.heroCard }}>
           <div>
             <p style={styles.kicker}>Evento selecionado</p>
             <p style={styles.heroSubtitle}>
@@ -535,17 +667,17 @@ export default function EventSettings() {
         </section>
 
         {loading ? (
-          <section style={styles.panelCard}>
+          <section style={{ ...styles.panelCard, ...responsive.panelCard }}>
             <p style={styles.emptyText}>Carregando informações do evento...</p>
           </section>
         ) : !eventData ? (
-          <section style={styles.panelCard}>
+          <section style={{ ...styles.panelCard, ...responsive.panelCard }}>
             <p style={styles.emptyText}>Evento não encontrado.</p>
             <div style={{ marginTop: 16 }}>
               <button
                 type="button"
                 onClick={handleBack}
-                style={styles.secondaryButton}
+                style={{ ...styles.secondaryButton, ...responsive.secondaryButton }}
               >
                 <ArrowLeft size={16} />
                 Voltar
@@ -553,13 +685,13 @@ export default function EventSettings() {
             </div>
           </section>
         ) : (
-          <section style={styles.contentGrid}>
+          <section style={{ ...styles.contentGrid, ...responsive.contentGrid }}>
             <div style={styles.leftColumn}>
-              <div style={styles.panelCard}>
+              <div style={{ ...styles.panelCard, ...responsive.panelCard }}>
                 <div style={styles.panelHeader}>
                   <div>
                     <p style={styles.kicker}>Resumo</p>
-                    <h2 style={styles.panelTitle}>Dados do evento</h2>
+                    <h2 style={{ ...styles.panelTitle, ...responsive.panelTitle }}>Dados do evento</h2>
                   </div>
                 </div>
 
@@ -591,7 +723,7 @@ export default function EventSettings() {
                 />
               </div>
 
-              <div style={styles.statsGrid}>
+              <div style={{ ...styles.statsGrid, ...responsive.statsGrid }}>
                 <div style={styles.statCard}>
                   <div style={styles.statIconWrap}>
                     <ImageIcon size={18} />
@@ -631,15 +763,15 @@ export default function EventSettings() {
             </div>
 
             <div style={styles.rightColumn}>
-              <form onSubmit={handleSave} style={styles.panelCard}>
+              <form onSubmit={handleSave} style={{ ...styles.panelCard, ...responsive.panelCard }}>
                 <div style={styles.panelHeader}>
                   <div>
                     <p style={styles.kicker}>Preferências</p>
-                    <h2 style={styles.panelTitle}>Editar configurações</h2>
+                    <h2 style={{ ...styles.panelTitle, ...responsive.panelTitle }}>Editar configurações</h2>
                   </div>
                 </div>
 
-                <div style={styles.formGrid}>
+                <div style={{ ...styles.formGrid, ...responsive.formGrid }}>
                   <label style={styles.field}>
                     <span style={styles.label}>Nome do evento</span>
                     <input
@@ -924,7 +1056,7 @@ export default function EventSettings() {
                 </div>
               </form>
 
-              <div style={styles.panelCard}>
+              <div style={{ ...styles.panelCard, ...responsive.panelCard }}>
                 <div style={styles.panelHeader}>
                   <div>
                     <p style={styles.kicker}>Pré-visualização</p>
@@ -964,13 +1096,13 @@ export default function EventSettings() {
                   />
                 </div>
 
-                <div style={styles.actionsRow}>
+                <div style={{ ...styles.actionsRow, ...responsive.actionsRow }}>
                   <button
                     type="button"
                     onClick={() => {
                       navigate(backLink, { replace: true });
                     }}
-                    style={styles.secondaryButton}
+                    style={{ ...styles.secondaryButton, ...responsive.secondaryButton }}
                   >
                     <ArrowLeft size={16} />
                     Voltar ao painel
@@ -978,7 +1110,7 @@ export default function EventSettings() {
 
                   <Link
                     to={`/evento/${eventData.slug}/galeria`}
-                    style={styles.primaryLinkButton}
+                    style={{ ...styles.primaryLinkButton, ...responsive.primaryLinkButton }}
                   >
                     <ImageIcon size={16} />
                     Abrir galeria
@@ -1169,6 +1301,8 @@ const styles = {
     position: "relative",
     zIndex: 1,
     padding: "28px",
+    width: "100%",
+    boxSizing: "border-box",
   },
   alert: {
     marginBottom: "18px",
@@ -1255,6 +1389,7 @@ const styles = {
     borderRadius: "28px",
     padding: "22px",
     boxShadow: "0 14px 36px rgba(24,32,79,0.06)",
+    minWidth: 0,
   },
   panelHeader: {
     marginBottom: "16px",
@@ -1284,6 +1419,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "14px",
+    minWidth: 0,
   },
   statIconWrap: {
     width: "46px",
@@ -1502,6 +1638,7 @@ const styles = {
     textDecoration: "none",
     fontWeight: 800,
     padding: "0 16px",
+    boxSizing: "border-box",
     boxShadow: "0 12px 24px rgba(30,36,64,0.16)",
   },
   secondaryButton: {
