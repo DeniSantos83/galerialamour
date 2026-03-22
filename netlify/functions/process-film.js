@@ -8,8 +8,7 @@ const { createClient } = require("@supabase/supabase-js");
 const SUPABASE_URL =
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 
-const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL) {
   throw new Error("SUPABASE_URL não definido na Netlify Function.");
@@ -25,13 +24,27 @@ if (!ffmpegPath) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+function shuffleArray(array) {
+  const clone = [...array];
+
+  for (let i = clone.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [clone[i], clone[j]] = [clone[j], clone[i]];
+  }
+
+  return clone;
+}
+
 async function downloadToFile(url, outputPath) {
   console.log("Baixando arquivo:", url);
 
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`Falha ao baixar arquivo: ${url} | status ${response.status}`);
+    const body = await response.text().catch(() => "");
+    throw new Error(
+      `Falha ao baixar arquivo: ${url} | status ${response.status} | body: ${body}`
+    );
   }
 
   const arrayBuffer = await response.arrayBuffer();
@@ -42,7 +55,7 @@ async function downloadToFile(url, outputPath) {
 }
 
 async function getDownloadUrl(item) {
-  if (item.file_url) {
+  if (item.file_url && /^https?:\/\//i.test(item.file_url)) {
     return item.file_url;
   }
 
@@ -76,8 +89,8 @@ function runFfmpeg(args) {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
-    let stderr = "";
     let stdout = "";
+    let stderr = "";
 
     child.stdout.on("data", (chunk) => {
       stdout += chunk.toString();
@@ -105,13 +118,26 @@ function runFfmpeg(args) {
   });
 }
 
-exports.handler = async function () {
+exports.handler = async function (event) {
   let tmpDir = null;
   let currentFilmId = null;
 
   try {
     console.log("Iniciando processamento de filme...");
     console.log("ffmpegPath:", ffmpegPath);
+
+    let requestMode = "unused_only";
+
+    try {
+      if (event?.body) {
+        const parsedBody = JSON.parse(event.body);
+        requestMode = parsedBody?.mode || "unused_only";
+      }
+    } catch (_) {
+      requestMode = "unused_only";
+    }
+
+    console.log("Modo solicitado:", requestMode);
 
     const { data: film, error: fetchError } = await supabase
       .from("event_films")
@@ -162,9 +188,10 @@ exports.handler = async function () {
     console.log("Uploads aprovados encontrados:", uploads?.length || 0);
 
     const approvedImages = (uploads || []).filter((item) => {
-      const type = String(item.file_type || "").toLowerCase();
-      const mime = String(item.mime_type || "").toLowerCase();
-      return type === "image" || mime.startsWith("image/");
+      const fileType = String(item.file_type || "").toLowerCase();
+      const mimeType = String(item.mime_type || "").toLowerCase();
+
+      return fileType === "image" || mimeType.startsWith("image/");
     });
 
     console.log("Imagens aprovadas filtradas:", approvedImages.length);
@@ -175,7 +202,11 @@ exports.handler = async function () {
 
     const { data: usedMediaRows, error: usedMediaError } = await supabase
       .from("event_film_items")
-      .select("media_id, film_id, event_films!inner(event_id)");
+      .select(`
+        media_id,
+        film_id,
+        event_films!inner(event_id)
+      `);
 
     if (usedMediaError) throw usedMediaError;
 
@@ -190,16 +221,39 @@ exports.handler = async function () {
 
     console.log("Imagens ainda não usadas:", unusedImages.length);
 
-    if (!unusedImages.length) {
-      throw new Error(
-        "Todas as imagens aprovadas deste evento já foram usadas em filmes anteriores."
-      );
+    let selectedSourceImages = [];
+
+    if (requestMode === "allow_reuse") {
+      if (unusedImages.length > 0) {
+        selectedSourceImages = unusedImages;
+      } else {
+        console.log("Sem imagens inéditas. Reutilizando imagens aprovadas.");
+        selectedSourceImages = shuffleArray(approvedImages);
+      }
+    } else {
+      if (!unusedImages.length) {
+        throw new Error(
+          "Todas as imagens aprovadas deste evento já foram usadas em filmes anteriores."
+        );
+      }
+
+      selectedSourceImages = unusedImages;
     }
 
-    const selectedImages = unusedImages.slice(0, 12);
+    if (!selectedSourceImages.length) {
+      throw new Error("Nenhuma imagem aprovada encontrada para este evento.");
+    }
+
+    const selectedImages = selectedSourceImages.slice(0, 12);
+
     console.log("Imagens selecionadas:", selectedImages.length);
 
-    await supabase.from("event_film_items").delete().eq("film_id", film.id);
+    const { error: deleteItemsError } = await supabase
+      .from("event_film_items")
+      .delete()
+      .eq("film_id", film.id);
+
+    if (deleteItemsError) throw deleteItemsError;
 
     const itemsPayload = selectedImages.map((item, index) => ({
       film_id: film.id,
@@ -222,6 +276,7 @@ exports.handler = async function () {
     tmpDir = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), `film-${film.id}-`)
     );
+
     console.log("Diretório temporário:", tmpDir);
 
     const imageListPath = path.join(tmpDir, "images.txt");
@@ -229,9 +284,10 @@ exports.handler = async function () {
 
     for (let i = 0; i < selectedImages.length; i += 1) {
       const item = selectedImages[i];
+
       const ext =
         path.extname(item.file_path || "") ||
-        (item.mime_type?.includes("png") ? ".png" : ".jpg");
+        (String(item.mime_type || "").includes("png") ? ".png" : ".jpg");
 
       const localPath = path.join(
         tmpDir,
@@ -244,9 +300,12 @@ exports.handler = async function () {
       localImagePaths.push(localPath);
     }
 
-    const totalDuration = Number(film.duration_seconds) > 0
-      ? Number(film.duration_seconds)
-      : 30;
+    if (!localImagePaths.length) {
+      throw new Error("Não foi possível baixar as imagens do filme.");
+    }
+
+    const totalDuration =
+      Number(film.duration_seconds) > 0 ? Number(film.duration_seconds) : 30;
 
     const secondsPerImage = Math.max(
       1,
@@ -343,6 +402,7 @@ exports.handler = async function () {
         selectedCount: selectedImages.length,
         outputPath: storagePath,
         durationSeconds: totalDuration,
+        mode: requestMode,
       }),
     };
   } catch (error) {

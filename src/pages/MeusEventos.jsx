@@ -348,9 +348,13 @@ export default function MeusEventos() {
     return queuedFilm.id;
   }
 
-  async function triggerFilmProcessing() {
+  async function triggerFilmProcessing(mode = "unused_only") {
     const response = await fetch("/.netlify/functions/process-film", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ mode }),
     });
 
     if (!response.ok) {
@@ -365,7 +369,7 @@ export default function MeusEventos() {
     }
   }
 
-  async function handleGenerateFilm() {
+  async function handleGenerateFilm(mode = "unused_only") {
     if (!selectedEvent?.id || generatingFilm || hasProcessingFilm) return;
 
     try {
@@ -390,9 +394,13 @@ export default function MeusEventos() {
       if (error) throw error;
 
       await updateQueuedFilmDuration(selectedEvent.id, selectedFilmDuration);
-      await triggerFilmProcessing();
+      await triggerFilmProcessing(mode);
       await loadFilmsForEvent(selectedEvent.id);
-      setMessage(`Filme enviado para processamento (${selectedFilmDuration}s).`);
+      setMessage(
+        mode === "allow_reuse"
+          ? `Filme enviado para processamento com reutilização de fotos (${selectedFilmDuration}s).`
+          : `Filme enviado para processamento com fotos inéditas (${selectedFilmDuration}s).`
+      );
 
       setTimeout(() => {
         loadFilmsForEvent(selectedEvent.id);
@@ -938,7 +946,7 @@ export default function MeusEventos() {
 
                     <button
                       type="button"
-                      onClick={handleGenerateFilm}
+                      onClick={() => handleGenerateFilm("unused_only")}
                       disabled={generatingFilm || hasProcessingFilm}
                       style={{
                         ...styles.primaryButtonDark,
@@ -950,11 +958,24 @@ export default function MeusEventos() {
                       }}
                     >
                       <Video size={16} />
-                      {generatingFilm
-                        ? "Gerando filme..."
-                        : hasProcessingFilm
-                        ? "Filme em processamento"
-                        : "Gerar filme"}
+                      {generatingFilm ? "Gerando..." : "Gerar com inéditas"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateFilm("allow_reuse")}
+                      disabled={generatingFilm || hasProcessingFilm}
+                      style={{
+                        ...styles.secondaryButton,
+                        opacity: generatingFilm || hasProcessingFilm ? 0.6 : 1,
+                        cursor:
+                          generatingFilm || hasProcessingFilm
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      <PlayCircle size={16} />
+                      Reutilizar fotos
                     </button>
                   </div>
                 ) : null}
