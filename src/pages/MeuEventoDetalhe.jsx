@@ -312,11 +312,13 @@ export default function MeuEventoDetalhe() {
   }
 
   async function triggerFilmProcessing(filmId, mode = "unused_only") {
-    if (!filmId) {
-      throw new Error("ID do filme não encontrado para iniciar o processamento.");
-    }
+  if (!filmId) {
+    throw new Error("ID do filme não encontrado para iniciar o processamento.");
+  }
 
-    const response = await fetch("/.netlify/functions/process-film", {
+  const response = await fetch(
+    "https://www.galerialamour.com.br/.netlify/functions/process-film",
+    {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -325,27 +327,27 @@ export default function MeuEventoDetalhe() {
         film_id: filmId,
         mode,
       }),
-    });
-
-    let payload = null;
-
-    try {
-      payload = await response.json();
-    } catch {
-      payload = null;
     }
+  );
 
-    if (!response.ok) {
-      throw new Error(
-        payload?.error ||
-          payload?.message ||
-          "Não foi possível iniciar o processamento do filme."
-      );
-    }
+  let payload = null;
 
-    return payload;
+  try {
+    payload = await response.json();
+  } catch (_) {
+    payload = null;
   }
 
+  if (!response.ok) {
+    throw new Error(
+      payload?.error ||
+        payload?.message ||
+        "Não foi possível iniciar o processamento do filme."
+    );
+  }
+
+  return payload;
+}
   async function handleGenerateFilm(mode = "unused_only") {
     if (!event?.id || generatingFilm || hasProcessingFilm) return;
 
