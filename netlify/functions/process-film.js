@@ -33,9 +33,9 @@ const MUSIC_LIBRARY = {
 
 const VIDEO_WIDTH = 1280;
 const VIDEO_HEIGHT = 720;
-const VIDEO_FPS = 30;
-const MAX_IMAGES = 12;
-const TRANSITION_DURATION = 0.9;
+const VIDEO_FPS = 24;
+const MAX_IMAGES = 6;
+const TRANSITION_DURATION = 0.6;
 
 function shuffleArray(array) {
   const clone = [...array];
@@ -145,18 +145,20 @@ function runFfmpeg(args) {
 }
 
 function buildZoomPanFilter(index, framesPerImage) {
-  const zoomStep = index % 2 === 0 ? "0.0009" : "0.0007";
-  const maxZoom = index % 2 === 0 ? "1.14" : "1.10";
+  const zoomStep = index % 2 === 0 ? "0.0005" : "0.0004";
+  const maxZoom = index % 2 === 0 ? "1.08" : "1.06";
+
   const xExpr =
     index % 3 === 0
       ? "iw/2-(iw/zoom/2)"
       : index % 3 === 1
-      ? "if(gte(zoom,1.02),(iw-iw/zoom)*0.12,(iw-iw/zoom)/2)"
-      : "if(gte(zoom,1.02),(iw-iw/zoom)*0.88,(iw-iw/zoom)/2)";
+      ? "if(gte(zoom,1.01),(iw-iw/zoom)*0.18,(iw-iw/zoom)/2)"
+      : "if(gte(zoom,1.01),(iw-iw/zoom)*0.82,(iw-iw/zoom)/2)";
+
   const yExpr =
     index % 2 === 0
-      ? "if(gte(zoom,1.02),(ih-ih/zoom)*0.18,(ih-ih/zoom)/2)"
-      : "if(gte(zoom,1.02),(ih-ih/zoom)*0.82,(ih-ih/zoom)/2)";
+      ? "if(gte(zoom,1.01),(ih-ih/zoom)*0.20,(ih-ih/zoom)/2)"
+      : "if(gte(zoom,1.01),(ih-ih/zoom)*0.80,(ih-ih/zoom)/2)";
 
   return [
     `scale=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:force_original_aspect_ratio=decrease`,
@@ -170,7 +172,7 @@ function buildZoomPanFilter(index, framesPerImage) {
 function buildVideoFilter(localImagePaths, secondsPerImage, transitionDuration) {
   const framesPerImage = Math.max(
     1,
-    Math.round((secondsPerImage + transitionDuration) * VIDEO_FPS)
+    Math.round(secondsPerImage * VIDEO_FPS)
   );
 
   const parts = [];
@@ -193,7 +195,9 @@ function buildVideoFilter(localImagePaths, secondsPerImage, transitionDuration) 
   for (let i = 1; i < localImagePaths.length; i += 1) {
     const nextLabel = `v${i}`;
     const outLabel = i === localImagePaths.length - 1 ? "vfinal" : `vx${i}`;
-    const offset = Number((secondsPerImage * i).toFixed(2));
+    const offset = Number(
+      ((secondsPerImage - transitionDuration) * i).toFixed(2)
+    );
 
     parts.push(
       `[${previousLabel}][${nextLabel}]xfade=transition=fade:duration=${transitionDuration}:offset=${offset}[${outLabel}]`
@@ -206,8 +210,8 @@ function buildVideoFilter(localImagePaths, secondsPerImage, transitionDuration) 
 }
 
 function buildAudioFilter(totalDuration) {
-  const fadeInDuration = Math.min(1.5, Math.max(0.5, totalDuration / 10));
-  const fadeOutDuration = Math.min(1.8, Math.max(0.8, totalDuration / 10));
+  const fadeInDuration = Math.min(1.2, Math.max(0.4, totalDuration / 12));
+  const fadeOutDuration = Math.min(1.5, Math.max(0.6, totalDuration / 12));
   const fadeOutStart = Math.max(0, totalDuration - fadeOutDuration);
 
   return `volume=0.18,afade=t=in:st=0:d=${fadeInDuration.toFixed(
@@ -430,12 +434,20 @@ exports.handler = async function (event) {
       Number(film.duration_seconds) > 0 ? Number(film.duration_seconds) : 30;
 
     const effectiveCount = Math.max(1, localImagePaths.length);
-    const secondsPerImage = Math.max(
-      2.2,
-      Number((totalDuration / effectiveCount).toFixed(2))
-    );
 
-    console.log("Duração total:", totalDuration);
+    const secondsPerImage =
+      effectiveCount === 1
+        ? totalDuration
+        : Number(
+            (
+              (totalDuration +
+                (effectiveCount - 1) * TRANSITION_DURATION) /
+              effectiveCount
+            ).toFixed(2)
+          );
+
+    console.log("Duração total desejada:", totalDuration);
+    console.log("Quantidade de imagens:", effectiveCount);
     console.log("Segundos por imagem:", secondsPerImage);
 
     const outputMp4Path = path.join(tmpDir, "highlight.mp4");
@@ -455,7 +467,7 @@ exports.handler = async function (event) {
         "-loop",
         "1",
         "-t",
-        (secondsPerImage + TRANSITION_DURATION + 0.15).toFixed(2),
+        secondsPerImage.toFixed(2),
         "-i",
         localImagePaths[i]
       );
@@ -485,12 +497,7 @@ exports.handler = async function (event) {
         "[aout]"
       );
     } else {
-      ffmpegArgs.push(
-        "-filter_complex",
-        videoFilter,
-        "-map",
-        "[vfinal]"
-      );
+      ffmpegArgs.push("-filter_complex", videoFilter, "-map", "[vfinal]");
     }
 
     ffmpegArgs.push(
