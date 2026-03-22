@@ -31,6 +31,12 @@ const MUSIC_LIBRARY = {
   carnaval: path.join(__dirname, "assets", "carnaval.mp3"),
 };
 
+const VIDEO_WIDTH = 1280;
+const VIDEO_HEIGHT = 720;
+const VIDEO_FPS = 30;
+const MAX_IMAGES = 12;
+const TRANSITION_DURATION = 0.9;
+
 function shuffleArray(array) {
   const clone = [...array];
 
@@ -40,6 +46,19 @@ function shuffleArray(array) {
   }
 
   return clone;
+}
+
+function normalizeMusicStyle(value) {
+  const normalized = String(value || "romantico").toLowerCase().trim();
+  return MUSIC_LIBRARY[normalized] ? normalized : "romantico";
+}
+
+function fileExists(filePath) {
+  try {
+    return Boolean(filePath && fs.existsSync(filePath));
+  } catch (_) {
+    return false;
+  }
 }
 
 async function downloadToFile(url, outputPath) {
@@ -125,6 +144,79 @@ function runFfmpeg(args) {
   });
 }
 
+function buildZoomPanFilter(index, framesPerImage) {
+  const zoomStep = index % 2 === 0 ? "0.0009" : "0.0007";
+  const maxZoom = index % 2 === 0 ? "1.14" : "1.10";
+  const xExpr =
+    index % 3 === 0
+      ? "iw/2-(iw/zoom/2)"
+      : index % 3 === 1
+      ? "if(gte(zoom,1.02),(iw-iw/zoom)*0.12,(iw-iw/zoom)/2)"
+      : "if(gte(zoom,1.02),(iw-iw/zoom)*0.88,(iw-iw/zoom)/2)";
+  const yExpr =
+    index % 2 === 0
+      ? "if(gte(zoom,1.02),(ih-ih/zoom)*0.18,(ih-ih/zoom)/2)"
+      : "if(gte(zoom,1.02),(ih-ih/zoom)*0.82,(ih-ih/zoom)/2)";
+
+  return [
+    `scale=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:force_original_aspect_ratio=decrease`,
+    `pad=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2`,
+    `zoompan=z='min(zoom+${zoomStep},${maxZoom})':x='${xExpr}':y='${yExpr}':d=${framesPerImage}:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:fps=${VIDEO_FPS}`,
+    "setsar=1",
+    "format=yuv420p",
+  ].join(",");
+}
+
+function buildVideoFilter(localImagePaths, secondsPerImage, transitionDuration) {
+  const framesPerImage = Math.max(
+    1,
+    Math.round((secondsPerImage + transitionDuration) * VIDEO_FPS)
+  );
+
+  const parts = [];
+
+  for (let i = 0; i < localImagePaths.length; i += 1) {
+    parts.push(`[${i}:v]${buildZoomPanFilter(i, framesPerImage)}[v${i}]`);
+  }
+
+  if (localImagePaths.length === 1) {
+    parts.push(
+      `[v0]trim=duration=${secondsPerImage.toFixed(
+        2
+      )},setpts=PTS-STARTPTS[vfinal]`
+    );
+    return parts.join(";");
+  }
+
+  let previousLabel = "v0";
+
+  for (let i = 1; i < localImagePaths.length; i += 1) {
+    const nextLabel = `v${i}`;
+    const outLabel = i === localImagePaths.length - 1 ? "vfinal" : `vx${i}`;
+    const offset = Number((secondsPerImage * i).toFixed(2));
+
+    parts.push(
+      `[${previousLabel}][${nextLabel}]xfade=transition=fade:duration=${transitionDuration}:offset=${offset}[${outLabel}]`
+    );
+
+    previousLabel = outLabel;
+  }
+
+  return parts.join(";");
+}
+
+function buildAudioFilter(totalDuration) {
+  const fadeInDuration = Math.min(1.5, Math.max(0.5, totalDuration / 10));
+  const fadeOutDuration = Math.min(1.8, Math.max(0.8, totalDuration / 10));
+  const fadeOutStart = Math.max(0, totalDuration - fadeOutDuration);
+
+  return `volume=0.18,afade=t=in:st=0:d=${fadeInDuration.toFixed(
+    2
+  )},afade=t=out:st=${fadeOutStart.toFixed(2)}:d=${fadeOutDuration.toFixed(
+    2
+  )}`;
+}
+
 exports.handler = async function (event) {
   let tmpDir = null;
   let currentFilmId = null;
@@ -150,32 +242,42 @@ exports.handler = async function (event) {
     console.log("Modo solicitado:", requestMode);
     console.log("Film ID solicitado:", requestedFilmId);
 
-    if (!requestedFilmId) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({
-          ok: false,
-          message: "film_id é obrigatório.",
-        }),
-      };
-    }
+    let film = null;
+    let fetchError = null;
 
-    const { data: film, error: fetchError } = await supabase
-      .from("event_films")
-      .select("*")
-      .eq("id", requestedFilmId)
-      .eq("status", "queued")
-      .maybeSingle();
+    if (requestedFilmId) {
+      const result = await supabase
+        .from("event_films")
+        .select("*")
+        .eq("id", requestedFilmId)
+        .eq("status", "queued")
+        .maybeSingle();
+
+      film = result.data;
+      fetchError = result.error;
+    } else {
+      console.log("film_id ausente. Usando fallback para o primeiro filme queued.");
+
+      const result = await supabase
+        .from("event_films")
+        .select("*")
+        .eq("status", "queued")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      film = result.data;
+      fetchError = result.error;
+    }
 
     if (fetchError) throw fetchError;
 
     if (!film) {
-      console.log("Filme não encontrado na fila para o ID informado.");
       return {
         statusCode: 404,
         body: JSON.stringify({
           ok: false,
-          message: "Filme não encontrado na fila.",
+          message: "Nenhum filme na fila.",
         }),
       };
     }
@@ -265,7 +367,7 @@ exports.handler = async function (event) {
       throw new Error("Nenhuma imagem aprovada encontrada para este evento.");
     }
 
-    const selectedImages = selectedSourceImages.slice(0, 12);
+    const selectedImages = selectedSourceImages.slice(0, MAX_IMAGES);
 
     console.log("Imagens selecionadas:", selectedImages.length);
 
@@ -300,7 +402,6 @@ exports.handler = async function (event) {
 
     console.log("Diretório temporário:", tmpDir);
 
-    const imageListPath = path.join(tmpDir, "images.txt");
     const localImagePaths = [];
 
     for (let i = 0; i < selectedImages.length; i += 1) {
@@ -328,65 +429,73 @@ exports.handler = async function (event) {
     const totalDuration =
       Number(film.duration_seconds) > 0 ? Number(film.duration_seconds) : 30;
 
+    const effectiveCount = Math.max(1, localImagePaths.length);
     const secondsPerImage = Math.max(
-      1,
-      Number((totalDuration / localImagePaths.length).toFixed(2))
+      2.2,
+      Number((totalDuration / effectiveCount).toFixed(2))
     );
 
     console.log("Duração total:", totalDuration);
     console.log("Segundos por imagem:", secondsPerImage);
 
-    const imageListContent = localImagePaths
-      .map((imgPath) => {
-        const escaped = imgPath.replace(/'/g, "'\\''");
-        return `file '${escaped}'\nduration ${secondsPerImage}`;
-      })
-      .join("\n");
-
-    const lastImageEscaped = localImagePaths[localImagePaths.length - 1].replace(
-      /'/g,
-      "'\\''"
-    );
-
-    await fs.promises.writeFile(
-      imageListPath,
-      `${imageListContent}\nfile '${lastImageEscaped}'\n`,
-      "utf8"
-    );
-
-    console.log("images.txt criado:", imageListPath);
-
     const outputMp4Path = path.join(tmpDir, "highlight.mp4");
 
-    const musicStyle = String(film.style || "romantico").toLowerCase();
-    const selectedMusicPath =
-      MUSIC_LIBRARY[musicStyle] || MUSIC_LIBRARY.romantico;
-    const hasMusicFile =
-      selectedMusicPath && fs.existsSync(selectedMusicPath);
+    const musicStyle = normalizeMusicStyle(film.style);
+    const selectedMusicPath = MUSIC_LIBRARY[musicStyle];
+    const hasMusicFile = fileExists(selectedMusicPath);
 
     console.log("Estilo musical:", musicStyle);
     console.log("Arquivo musical:", selectedMusicPath);
     console.log("Tem trilha:", hasMusicFile);
 
-    const ffmpegArgs = [
-      "-y",
-      "-f",
-      "concat",
-      "-safe",
-      "0",
-      "-i",
-      imageListPath,
-    ];
+    const ffmpegArgs = ["-y"];
+
+    for (let i = 0; i < localImagePaths.length; i += 1) {
+      ffmpegArgs.push(
+        "-loop",
+        "1",
+        "-t",
+        (secondsPerImage + TRANSITION_DURATION + 0.15).toFixed(2),
+        "-i",
+        localImagePaths[i]
+      );
+    }
+
+    let audioInputIndex = null;
 
     if (hasMusicFile) {
-      ffmpegArgs.push("-i", selectedMusicPath);
+      audioInputIndex = localImagePaths.length;
+      ffmpegArgs.push("-stream_loop", "-1", "-i", selectedMusicPath);
+    }
+
+    const videoFilter = buildVideoFilter(
+      localImagePaths,
+      secondsPerImage,
+      TRANSITION_DURATION
+    );
+
+    if (hasMusicFile) {
+      const audioFilter = buildAudioFilter(totalDuration);
+      ffmpegArgs.push(
+        "-filter_complex",
+        `${videoFilter};[${audioInputIndex}:a]${audioFilter}[aout]`,
+        "-map",
+        "[vfinal]",
+        "-map",
+        "[aout]"
+      );
+    } else {
+      ffmpegArgs.push(
+        "-filter_complex",
+        videoFilter,
+        "-map",
+        "[vfinal]"
+      );
     }
 
     ffmpegArgs.push(
-      "-vf",
-      "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
       "-r",
-      "30",
+      String(VIDEO_FPS),
       "-pix_fmt",
       "yuv420p",
       "-c:v",
@@ -394,13 +503,7 @@ exports.handler = async function (event) {
     );
 
     if (hasMusicFile) {
-      ffmpegArgs.push(
-        "-filter:a",
-        "volume=0.18",
-        "-c:a",
-        "aac",
-        "-shortest"
-      );
+      ffmpegArgs.push("-c:a", "aac", "-shortest");
     }
 
     ffmpegArgs.push("-movflags", "+faststart", outputMp4Path);
@@ -455,6 +558,7 @@ exports.handler = async function (event) {
         durationSeconds: totalDuration,
         mode: requestMode,
         musicStyle,
+        hasMusicFile,
       }),
     };
   } catch (error) {
