@@ -31,8 +31,8 @@ const MUSIC_LIBRARY = {
   carnaval: path.join(__dirname, "assets", "carnaval.mp3"),
 };
 
-const VIDEO_WIDTH = 1280;
-const VIDEO_HEIGHT = 720;
+const VIDEO_WIDTH = 960;
+const VIDEO_HEIGHT = 540;
 const VIDEO_FPS = 24;
 const MAX_IMAGES = 6;
 const TRANSITION_DURATION = 0.6;
@@ -145,7 +145,7 @@ function runFfmpeg(args) {
 }
 
 function buildZoomPanFilter(index, framesPerImage) {
-  const zoomStep = index % 2 === 0 ? "0.0005" : "0.0004";
+  const zoomStep = index % 2 === 0 ? "0.0003" : "0.0004";
   const maxZoom = index % 2 === 0 ? "1.08" : "1.06";
 
   const xExpr =
@@ -172,7 +172,7 @@ function buildZoomPanFilter(index, framesPerImage) {
 function buildVideoFilter(localImagePaths, secondsPerImage, transitionDuration) {
   const framesPerImage = Math.max(
     1,
-    Math.round(secondsPerImage * VIDEO_FPS)
+    Math.round(secondsPerImage * 12)
   );
 
   const parts = [];
