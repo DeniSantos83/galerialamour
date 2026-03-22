@@ -317,7 +317,7 @@ export default function MeuEventoDetalhe() {
   }
 
   const response = await fetch(
-    "https://www.galerialamour.com.br/.netlify/functions/process-film",
+    "https://www.galerialamour.com.br/.netlify/functions/process-film-background",
     {
       method: "POST",
       headers: {
