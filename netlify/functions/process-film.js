@@ -134,35 +134,48 @@ exports.handler = async function (event) {
     console.log("ffmpegPath:", ffmpegPath);
 
     let requestMode = "unused_only";
+    let requestedFilmId = null;
 
     try {
       if (event?.body) {
         const parsedBody = JSON.parse(event.body);
         requestMode = parsedBody?.mode || "unused_only";
+        requestedFilmId = parsedBody?.film_id || null;
       }
     } catch (_) {
       requestMode = "unused_only";
+      requestedFilmId = null;
     }
 
     console.log("Modo solicitado:", requestMode);
+    console.log("Film ID solicitado:", requestedFilmId);
+
+    if (!requestedFilmId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          ok: false,
+          message: "film_id é obrigatório.",
+        }),
+      };
+    }
 
     const { data: film, error: fetchError } = await supabase
       .from("event_films")
       .select("*")
+      .eq("id", requestedFilmId)
       .eq("status", "queued")
-      .order("created_at", { ascending: true })
-      .limit(1)
       .maybeSingle();
 
     if (fetchError) throw fetchError;
 
     if (!film) {
-      console.log("Nenhum filme na fila.");
+      console.log("Filme não encontrado na fila para o ID informado.");
       return {
-        statusCode: 200,
+        statusCode: 404,
         body: JSON.stringify({
-          ok: true,
-          message: "Nenhum filme na fila.",
+          ok: false,
+          message: "Filme não encontrado na fila.",
         }),
       };
     }
@@ -223,7 +236,9 @@ exports.handler = async function (event) {
         .filter(Boolean)
     );
 
-    const unusedImages = approvedImages.filter((item) => !usedMediaIds.has(item.id));
+    const unusedImages = approvedImages.filter(
+      (item) => !usedMediaIds.has(item.id)
+    );
 
     console.log("Imagens ainda não usadas:", unusedImages.length);
 
