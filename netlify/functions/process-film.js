@@ -144,41 +144,20 @@ function runFfmpeg(args) {
   });
 }
 
-function buildZoomPanFilter(index, framesPerImage) {
-  const zoomStep = index % 2 === 0 ? "0.0003" : "0.0004";
-  const maxZoom = index % 2 === 0 ? "1.08" : "1.06";
-
-  const xExpr =
-    index % 3 === 0
-      ? "iw/2-(iw/zoom/2)"
-      : index % 3 === 1
-      ? "if(gte(zoom,1.01),(iw-iw/zoom)*0.18,(iw-iw/zoom)/2)"
-      : "if(gte(zoom,1.01),(iw-iw/zoom)*0.82,(iw-iw/zoom)/2)";
-
-  const yExpr =
-    index % 2 === 0
-      ? "if(gte(zoom,1.01),(ih-ih/zoom)*0.20,(ih-ih/zoom)/2)"
-      : "if(gte(zoom,1.01),(ih-ih/zoom)*0.80,(ih-ih/zoom)/2)";
-
+function buildStillImageFilter() {
   return [
     `scale=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:force_original_aspect_ratio=decrease`,
     `pad=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2`,
-    `zoompan=z='min(zoom+${zoomStep},${maxZoom})':x='${xExpr}':y='${yExpr}':d=${framesPerImage}:s=${VIDEO_WIDTH}x${VIDEO_HEIGHT}:fps=${VIDEO_FPS}`,
     "setsar=1",
     "format=yuv420p",
   ].join(",");
 }
 
 function buildVideoFilter(localImagePaths, secondsPerImage, transitionDuration) {
-  const framesPerImage = Math.max(
-    1,
-    Math.round(secondsPerImage * 12)
-  );
-
   const parts = [];
 
   for (let i = 0; i < localImagePaths.length; i += 1) {
-    parts.push(`[${i}:v]${buildZoomPanFilter(i, framesPerImage)}[v${i}]`);
+    parts.push(`[${i}:v]${buildStillImageFilter()}[v${i}]`);
   }
 
   if (localImagePaths.length === 1) {
