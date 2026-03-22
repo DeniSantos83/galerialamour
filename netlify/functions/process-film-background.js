@@ -170,7 +170,7 @@ function buildZoomPanFilter(index, framesPerImage) {
 function buildVideoFilter(localImagePaths, secondsPerImage, transitionDuration) {
   const framesPerImage = Math.max(
     1,
-    Math.round((secondsPerImage + transitionDuration) * VIDEO_FPS)
+    Math.round(secondsPerImage * VIDEO_FPS)
   );
 
   const parts = [];
@@ -193,7 +193,9 @@ function buildVideoFilter(localImagePaths, secondsPerImage, transitionDuration) 
   for (let i = 1; i < localImagePaths.length; i += 1) {
     const nextLabel = `v${i}`;
     const outLabel = i === localImagePaths.length - 1 ? "vfinal" : `vx${i}`;
-    const offset = Number((secondsPerImage * i).toFixed(2));
+    const offset = Number(
+      ((secondsPerImage - transitionDuration) * i).toFixed(2)
+    );
 
     parts.push(
       `[${previousLabel}][${nextLabel}]xfade=transition=fade:duration=${transitionDuration}:offset=${offset}[${outLabel}]`
@@ -204,6 +206,25 @@ function buildVideoFilter(localImagePaths, secondsPerImage, transitionDuration) 
 
   return parts.join(";");
 }
+
+  let previousLabel = "v0";
+
+  for (let i = 1; i < localImagePaths.length; i += 1) {
+    const nextLabel = `v${i}`;
+    const outLabel = i === localImagePaths.length - 1 ? "vfinal" : `vx${i}`;
+    const offset = Number(
+  ((secondsPerImage - transitionDuration) * i).toFixed(2)
+);
+
+    parts.push(
+      `[${previousLabel}][${nextLabel}]xfade=transition=fade:duration=${transitionDuration}:offset=${offset}[${outLabel}]`
+    );
+
+    previousLabel = outLabel;
+  }
+
+  return parts.join(";");
+
 
 function buildAudioFilter(totalDuration) {
   const fadeInDuration = Math.min(1.5, Math.max(0.5, totalDuration / 10));
@@ -472,15 +493,15 @@ exports.handler = async function (event) {
     const ffmpegArgs = ["-y"];
 
     for (let i = 0; i < localImagePaths.length; i += 1) {
-      ffmpegArgs.push(
-        "-loop",
-        "1",
-        "-t",
-        (secondsPerImage + TRANSITION_DURATION + 0.15).toFixed(2),
-        "-i",
-        localImagePaths[i]
-      );
-    }
+  ffmpegArgs.push(
+    "-loop",
+    "1",
+    "-t",
+    secondsPerImage.toFixed(2),
+    "-i",
+    localImagePaths[i]
+  );
+}
 
     let audioInputIndex = null;
 
