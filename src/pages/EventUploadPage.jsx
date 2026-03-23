@@ -64,8 +64,7 @@ export default function EventUploadPage() {
   const [pageError, setPageError] = useState("")
 
   const [guestName, setGuestName] = useState("")
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [selectedCategory, setSelectedCategory] = useState(null)
+  const [selectedFiles, setSelectedFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState("idle")
@@ -132,22 +131,29 @@ export default function EventUploadPage() {
     if (uploading) return
     fileInputRef.current?.click()
   }
+const handleFileChange = async (e) => {
+  const files = Array.from(e.target.files || [])
+  setMessage("")
+  setMessageType("idle")
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0]
-    setMessage("")
-    setMessageType("idle")
+  if (!files.length) {
+    setSelectedFiles([])
+    return
+  }
 
-    if (!file) {
-      setSelectedFile(null)
-      setSelectedCategory(null)
-      return
-    }
+  if (files.length > 3) {
+    setSelectedFiles([])
+    setMessage("Você pode selecionar no máximo 3 arquivos por vez.")
+    setMessageType("error")
+    return
+  }
 
+  const validatedFiles = []
+
+  for (const file of files) {
     const typeError = validateFileType(file)
     if (typeError) {
-      setSelectedFile(null)
-      setSelectedCategory(null)
+      setSelectedFiles([])
       setMessage(typeError)
       setMessageType("error")
       return
@@ -156,8 +162,7 @@ export default function EventUploadPage() {
     const category = getFileCategory(file)
 
     if (category === "video" && settings?.allow_videos === false) {
-      setSelectedFile(null)
-      setSelectedCategory(null)
+      setSelectedFiles([])
       setMessage("Este evento não aceita envio de vídeos.")
       setMessageType("error")
       return
@@ -165,8 +170,7 @@ export default function EventUploadPage() {
 
     const sizeError = validateFileSize(file, settings)
     if (sizeError) {
-      setSelectedFile(null)
-      setSelectedCategory(null)
+      setSelectedFiles([])
       setMessage(sizeError)
       setMessageType("error")
       return
@@ -176,26 +180,29 @@ export default function EventUploadPage() {
       try {
         const durationError = await validateVideoDuration(file, settings)
         if (durationError) {
-          setSelectedFile(null)
-          setSelectedCategory(null)
+          setSelectedFiles([])
           setMessage(durationError)
           setMessageType("error")
           return
         }
       } catch (error) {
-        setSelectedFile(null)
-        setSelectedCategory(null)
+        setSelectedFiles([])
         setMessage(error.message || "Não foi possível validar o vídeo.")
         setMessageType("error")
         return
       }
     }
 
-    setSelectedFile(file)
-    setSelectedCategory(category)
-    setMessage("Arquivo selecionado com sucesso.")
-    setMessageType("success")
+    validatedFiles.push({
+      file,
+      category,
+    })
   }
+
+  setSelectedFiles(validatedFiles)
+  setMessage("Arquivos selecionados com sucesso.")
+  setMessageType("success")
+}
 
   const handleUpload = async () => {
     setMessage("")
@@ -215,92 +222,101 @@ export default function EventUploadPage() {
       return
     }
 
-    if (!selectedFile || !selectedCategory) {
-      setMessage("Selecione uma foto ou vídeo antes de enviar.")
+    if (!selectedFiles.length) {
+      setMessage("Selecione ao menos um arquivo antes de enviar.")
       setMessageType("error")
       return
     }
 
     setUploading(true)
 
-    const storagePath = buildStoragePath(event.slug, selectedFile.name)
+    try {
+      for (const item of selectedFiles) {
+        const selectedFile = item.file
+        const selectedCategory = item.category
 
-    const { error: storageError } = await supabase.storage
-      .from("event-media")
-      .upload(storagePath, selectedFile, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: selectedFile.type,
-      })
+        const storagePath = buildStoragePath(event.slug, selectedFile.name)
 
-    if (storageError) {
-      setMessage(storageError.message || "Falha ao enviar o arquivo.")
-      setMessageType("error")
-      setUploading(false)
-      return
-    }
+        const { error: storageError } = await supabase.storage
+          .from("event-media")
+          .upload(storagePath, selectedFile, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: selectedFile.type,
+          })
 
-    let durationSeconds = null
+        if (storageError) {
+          throw new Error(storageError.message || "Falha ao enviar o arquivo.")
+        }
 
-    if (selectedCategory === "video") {
-      try {
-        const video = document.createElement("video")
-        const url = URL.createObjectURL(selectedFile)
+        let durationSeconds = null
 
-        durationSeconds = await new Promise((resolve, reject) => {
-          video.preload = "metadata"
+        if (selectedCategory === "video") {
+          try {
+            const video = document.createElement("video")
+            const url = URL.createObjectURL(selectedFile)
 
-          video.onloadedmetadata = () => {
-            URL.revokeObjectURL(url)
-            resolve(Math.round(video.duration))
+            durationSeconds = await new Promise((resolve, reject) => {
+              video.preload = "metadata"
+
+              video.onloadedmetadata = () => {
+                URL.revokeObjectURL(url)
+                resolve(Math.round(video.duration))
+              }
+
+              video.onerror = () => {
+                URL.revokeObjectURL(url)
+                reject(new Error("Não foi possível obter a duração do vídeo."))
+              }
+
+              video.src = url
+            })
+          } catch {
+            durationSeconds = null
           }
+        }
 
-          video.onerror = () => {
-            URL.revokeObjectURL(url)
-            reject(new Error("Não foi possível obter a duração do vídeo."))
-          }
+        const { error: insertError } = await supabase
+          .from("uploads")
+          .insert({
+            event_id: event.id,
+            file_path: storagePath,
+            file_url: null,
+            file_type: selectedCategory,
+            mime_type: selectedFile.type,
+            size_bytes: selectedFile.size,
+            duration_seconds: durationSeconds,
+            orientation: null,
+            status: "pending",
+            guest_name: guestName.trim() || null,
+          })
 
-          video.src = url
-        })
-      } catch {
-        durationSeconds = null
+        if (insertError) {
+          throw new Error(
+            insertError.message ||
+              "Arquivo enviado, mas houve erro ao registrar no banco."
+          )
+        }
       }
-    }
 
-    const { error: insertError } = await supabase
-  .from("uploads")
-  .insert({
-    event_id: event.id,
-    file_path: storagePath,
-    file_url: null,
-    file_type: selectedCategory,
-    mime_type: selectedFile.type,
-    size_bytes: selectedFile.size,
-    duration_seconds: durationSeconds,
-    orientation: null,
-    status: "pending",
-    guest_name: guestName.trim() || null,
-  })
-    if (insertError) {
       setMessage(
-        insertError.message || "Arquivo enviado, mas houve erro ao registrar no banco."
+        selectedFiles.length === 1
+          ? "Arquivo enviado com sucesso. Obrigado por compartilhar esse momento."
+          : "Arquivos enviados com sucesso. Obrigado por compartilhar esse momento."
       )
+      setMessageType("success")
+      setSelectedFiles([])
+      setGuestName("")
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    } catch (error) {
+      setMessage(error.message || "Falha ao enviar os arquivos.")
       setMessageType("error")
+    } finally {
       setUploading(false)
-      return
     }
-
-    setMessage("Arquivo enviado com sucesso. Obrigado por compartilhar esse momento.")
-    setMessageType("success")
-    setSelectedFile(null)
-    setSelectedCategory(null)
-    setGuestName("")
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
-    }
-
-    setUploading(false)
   }
 
   if (loadingPage) {
@@ -449,6 +465,7 @@ export default function EventUploadPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
+                  multiple
                   accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
                   onChange={handleFileChange}
                   className="hidden"
@@ -473,11 +490,11 @@ export default function EventUploadPage() {
                 </button>
               </div>
 
-              {selectedFile && (
+              {selectedFiles.length > 0 && (
                 <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900/8 text-slate-900">
-                      {selectedCategory === "image" ? (
+                      {selectedFiles.every((item) => item.category === "image") ? (
                         <ImageIcon className="h-5 w-5" />
                       ) : (
                         <Video className="h-5 w-5" />
@@ -486,11 +503,11 @@ export default function EventUploadPage() {
 
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-slate-900">
-                        {selectedFile.name}
+                        {selectedFiles.length === 1 ? selectedFiles[0].file.name : `${selectedFiles.length} arquivos selecionados`}
                       </p>
                       <p className="mt-1 text-sm text-slate-600">
-                        {selectedCategory === "image" ? "Foto" : "Vídeo"} ·{" "}
-                        {formatBytes(selectedFile.size)}
+                        {selectedFiles.length === 1 ? (selectedFiles[0].category === "image" ? "Foto" : "Vídeo") : "Arquivos"} ·{" "}
+                        {selectedFiles.length === 1 ? formatBytes(selectedFiles[0].file.size) : `${selectedFiles.length} itens`}
                       </p>
                     </div>
                   </div>

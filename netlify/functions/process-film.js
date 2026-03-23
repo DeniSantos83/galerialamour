@@ -3,6 +3,7 @@ const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 const ffmpegPath = require("ffmpeg-static");
+const fetch = require("node-fetch");
 const { createClient } = require("@supabase/supabase-js");
 
 const SUPABASE_URL =
@@ -24,18 +25,10 @@ if (!ffmpegPath) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-const MUSIC_LIBRARY = {
-  romantico: path.join(__dirname, "assets", "romantico.mp3"),
-  jovem: path.join(__dirname, "assets", "jovem.mp3"),
-  forro: path.join(__dirname, "assets", "forro.mp3"),
-  carnaval: path.join(__dirname, "assets", "carnaval.mp3"),
-};
-
 const VIDEO_WIDTH = 960;
 const VIDEO_HEIGHT = 540;
 const VIDEO_FPS = 24;
-const MAX_IMAGES = 6;
-const TRANSITION_DURATION = 0.6;
+const TRANSITION_DURATION = 0.5;
 
 function shuffleArray(array) {
   const clone = [...array];
@@ -48,16 +41,27 @@ function shuffleArray(array) {
   return clone;
 }
 
-function normalizeMusicStyle(value) {
-  const normalized = String(value || "romantico").toLowerCase().trim();
-  return MUSIC_LIBRARY[normalized] ? normalized : "romantico";
+function getMaxImagesByDuration(durationSeconds) {
+  const duration = Number(durationSeconds) || 30;
+
+  if (duration <= 30) return 10;
+  if (duration <= 45) return 15;
+  return 18;
 }
 
-function fileExists(filePath) {
-  try {
-    return Boolean(filePath && fs.existsSync(filePath));
-  } catch (_) {
-    return false;
+async function updateFilmStatus(filmId, values) {
+  const payload = {
+    ...values,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("event_films")
+    .update(payload)
+    .eq("id", filmId);
+
+  if (error) {
+    throw error;
   }
 }
 
@@ -188,18 +192,6 @@ function buildVideoFilter(localImagePaths, secondsPerImage, transitionDuration) 
   return parts.join(";");
 }
 
-function buildAudioFilter(totalDuration) {
-  const fadeInDuration = Math.min(1.2, Math.max(0.4, totalDuration / 12));
-  const fadeOutDuration = Math.min(1.5, Math.max(0.6, totalDuration / 12));
-  const fadeOutStart = Math.max(0, totalDuration - fadeOutDuration);
-
-  return `volume=0.18,afade=t=in:st=0:d=${fadeInDuration.toFixed(
-    2
-  )},afade=t=out:st=${fadeOutStart.toFixed(2)}:d=${fadeOutDuration.toFixed(
-    2
-  )}`;
-}
-
 exports.handler = async function (event) {
   let tmpDir = null;
   let currentFilmId = null;
@@ -217,67 +209,42 @@ exports.handler = async function (event) {
         requestMode = parsedBody?.mode || "unused_only";
         requestedFilmId = parsedBody?.film_id || null;
       }
-    } catch (_) {
-      requestMode = "unused_only";
-      requestedFilmId = null;
+    } catch (parseError) {
+      console.error("Erro ao ler body:", parseError);
+      throw new Error("Body inválido para processar o filme.");
     }
 
     console.log("Modo solicitado:", requestMode);
     console.log("Film ID solicitado:", requestedFilmId);
 
-    let film = null;
-    let fetchError = null;
-
-    if (requestedFilmId) {
-      const result = await supabase
-        .from("event_films")
-        .select("*")
-        .eq("id", requestedFilmId)
-        .eq("status", "queued")
-        .maybeSingle();
-
-      film = result.data;
-      fetchError = result.error;
-    } else {
-      console.log("film_id ausente. Usando fallback para o primeiro filme queued.");
-
-      const result = await supabase
-        .from("event_films")
-        .select("*")
-        .eq("status", "queued")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      film = result.data;
-      fetchError = result.error;
+    if (!requestedFilmId) {
+      throw new Error("film_id é obrigatório para processar o filme.");
     }
+
+    const { data: film, error: fetchError } = await supabase
+      .from("event_films")
+      .select("*")
+      .eq("id", requestedFilmId)
+      .in("status", ["queued", "processing"])
+      .maybeSingle();
 
     if (fetchError) throw fetchError;
 
     if (!film) {
-      return {
-        statusCode: 404,
-        body: JSON.stringify({
-          ok: false,
-          message: "Nenhum filme na fila.",
-        }),
-      };
+      throw new Error(
+        "Filme não encontrado ou não está mais disponível para processamento."
+      );
     }
 
     currentFilmId = film.id;
     console.log("Filme encontrado:", film.id);
 
-    const { error: processingError } = await supabase
-      .from("event_films")
-      .update({
+    if (film.status !== "processing") {
+      await updateFilmStatus(film.id, {
         status: "processing",
         error_message: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", film.id);
-
-    if (processingError) throw processingError;
+      });
+    }
 
     console.log("Status alterado para processing.");
 
@@ -350,8 +317,14 @@ exports.handler = async function (event) {
       throw new Error("Nenhuma imagem aprovada encontrada para este evento.");
     }
 
-    const selectedImages = selectedSourceImages.slice(0, MAX_IMAGES);
+    const totalDuration =
+      Number(film.duration_seconds) > 0 ? Number(film.duration_seconds) : 30;
 
+    const maxImages = getMaxImagesByDuration(totalDuration);
+    const selectedImages = selectedSourceImages.slice(0, maxImages);
+
+    console.log("Duração total desejada:", totalDuration);
+    console.log("Limite de imagens para essa duração:", maxImages);
     console.log("Imagens selecionadas:", selectedImages.length);
 
     const { error: deleteItemsError } = await supabase
@@ -409,9 +382,6 @@ exports.handler = async function (event) {
       throw new Error("Não foi possível baixar as imagens do filme.");
     }
 
-    const totalDuration =
-      Number(film.duration_seconds) > 0 ? Number(film.duration_seconds) : 30;
-
     const effectiveCount = Math.max(1, localImagePaths.length);
 
     const secondsPerImage =
@@ -425,19 +395,10 @@ exports.handler = async function (event) {
             ).toFixed(2)
           );
 
-    console.log("Duração total desejada:", totalDuration);
     console.log("Quantidade de imagens:", effectiveCount);
     console.log("Segundos por imagem:", secondsPerImage);
 
     const outputMp4Path = path.join(tmpDir, "highlight.mp4");
-
-    const musicStyle = normalizeMusicStyle(film.style);
-    const selectedMusicPath = MUSIC_LIBRARY[musicStyle];
-    const hasMusicFile = fileExists(selectedMusicPath);
-
-    console.log("Estilo musical:", musicStyle);
-    console.log("Arquivo musical:", selectedMusicPath);
-    console.log("Tem trilha:", hasMusicFile);
 
     const ffmpegArgs = ["-y"];
 
@@ -452,47 +413,27 @@ exports.handler = async function (event) {
       );
     }
 
-    let audioInputIndex = null;
-
-    if (hasMusicFile) {
-      audioInputIndex = localImagePaths.length;
-      ffmpegArgs.push("-stream_loop", "-1", "-i", selectedMusicPath);
-    }
-
     const videoFilter = buildVideoFilter(
       localImagePaths,
       secondsPerImage,
       TRANSITION_DURATION
     );
 
-    if (hasMusicFile) {
-      const audioFilter = buildAudioFilter(totalDuration);
-      ffmpegArgs.push(
-        "-filter_complex",
-        `${videoFilter};[${audioInputIndex}:a]${audioFilter}[aout]`,
-        "-map",
-        "[vfinal]",
-        "-map",
-        "[aout]"
-      );
-    } else {
-      ffmpegArgs.push("-filter_complex", videoFilter, "-map", "[vfinal]");
-    }
-
     ffmpegArgs.push(
+      "-filter_complex",
+      videoFilter,
+      "-map",
+      "[vfinal]",
       "-r",
       String(VIDEO_FPS),
       "-pix_fmt",
       "yuv420p",
       "-c:v",
-      "libx264"
+      "libx264",
+      "-movflags",
+      "+faststart",
+      outputMp4Path
     );
-
-    if (hasMusicFile) {
-      ffmpegArgs.push("-c:a", "aac", "-shortest");
-    }
-
-    ffmpegArgs.push("-movflags", "+faststart", outputMp4Path);
 
     await runFfmpeg(ffmpegArgs);
 
@@ -518,18 +459,12 @@ exports.handler = async function (event) {
 
     if (signedUrlError) throw signedUrlError;
 
-    const { error: readyError } = await supabase
-      .from("event_films")
-      .update({
-        status: "ready",
-        output_path: storagePath,
-        output_url: signedUrlData.signedUrl,
-        error_message: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", film.id);
-
-    if (readyError) throw readyError;
+    await updateFilmStatus(film.id, {
+      status: "completed",
+      output_path: storagePath,
+      output_url: signedUrlData?.signedUrl || null,
+      error_message: null,
+    });
 
     console.log("Filme finalizado com sucesso.");
 
@@ -543,8 +478,6 @@ exports.handler = async function (event) {
         outputPath: storagePath,
         durationSeconds: totalDuration,
         mode: requestMode,
-        musicStyle,
-        hasMusicFile,
       }),
     };
   } catch (error) {

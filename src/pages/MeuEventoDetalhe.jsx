@@ -20,13 +20,7 @@ import { supabase } from "../lib/supabase";
 const MOBILE_BREAKPOINT = 768;
 const TABLET_BREAKPOINT = 1080;
 const FILM_STORAGE_BUCKET = "event-media";
-const FILM_DURATION_OPTIONS = [15, 30, 45];
-const FILM_MUSIC_OPTIONS = [
-  { value: "romantico", label: "Romântica" },
-  { value: "jovem", label: "Jovem e enérgica" },
-  { value: "forro", label: "Forró" },
-  { value: "carnaval", label: "Carnaval" },
-];
+const FILM_DURATION_OPTIONS = [30, 45, 60];
 
 export default function MeuEventoDetalhe() {
   const { slug } = useParams();
@@ -47,7 +41,6 @@ export default function MeuEventoDetalhe() {
   const [error, setError] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
   const [selectedFilmDuration, setSelectedFilmDuration] = useState(30);
-  const [selectedMusicStyle, setSelectedMusicStyle] = useState("romantico");
   const [screenWidth, setScreenWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1440
   );
@@ -250,20 +243,14 @@ export default function MeuEventoDetalhe() {
     }
   }
 
-  async function createQueuedFilm(eventId, createdBy, durationSeconds, musicStyle) {
-    const normalizedMusicStyle = FILM_MUSIC_OPTIONS.some(
-      (option) => option.value === musicStyle
-    )
-      ? musicStyle
-      : "romantico";
-
+  async function createQueuedFilm(eventId, createdBy, durationSeconds) {
     const { data, error } = await supabase
       .from("event_films")
       .insert({
         event_id: eventId,
         created_by: createdBy || null,
         title: null,
-        style: normalizedMusicStyle,
+        style: "slideshow",
         format: "mp4",
         status: "queued",
         duration_seconds: durationSeconds,
@@ -278,47 +265,52 @@ export default function MeuEventoDetalhe() {
     return data?.id || null;
   }
 
-  async function updateQueuedFilmSettings(eventId, durationSeconds, musicStyle) {
-    const { data: queuedFilm, error: queuedFilmError } = await supabase
-      .from("event_films")
-      .select("id")
-      .eq("event_id", eventId)
-      .eq("status", "queued")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  async function updateQueuedFilmDurationById(filmId, durationSeconds) {
+    if (!filmId) return null;
 
-    if (queuedFilmError) throw queuedFilmError;
-    if (!queuedFilm?.id) return null;
-
-    const normalizedMusicStyle = FILM_MUSIC_OPTIONS.some(
-      (option) => option.value === musicStyle
-    )
-      ? musicStyle
-      : "romantico";
-
-    const { error: updateError } = await supabase
+    const { error } = await supabase
       .from("event_films")
       .update({
         duration_seconds: durationSeconds,
-        style: normalizedMusicStyle,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", queuedFilm.id);
+      .eq("id", filmId);
 
-    if (updateError) throw updateError;
+    if (error) throw error;
 
-    return queuedFilm.id;
+    return filmId;
+  }
+
+  async function pollFilmUntilFinish(eventId, maxAttempts = 24, intervalMs = 5000) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      await loadFilmsData(eventId);
+
+      const { data, error } = await supabase
+        .from("event_films")
+        .select("status, error_message, output_path, output_url")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      const filmsList = data || [];
+      const hasPending = filmsList.some((film) => {
+        const status = String(film.status || "").toLowerCase();
+        return status === "queued" || status === "processing";
+      });
+
+      if (!hasPending) return;
+
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
   }
 
   async function triggerFilmProcessing(filmId, mode = "unused_only") {
-  if (!filmId) {
-    throw new Error("ID do filme não encontrado para iniciar o processamento.");
-  }
+    if (!filmId) {
+      throw new Error("ID do filme não encontrado para iniciar o processamento.");
+    }
 
-  const response = await fetch(
-    "https://www.galerialamour.com.br/.netlify/functions/process-film",
-    {
+    const response = await fetch("/.netlify/functions/process-film", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -327,27 +319,27 @@ export default function MeuEventoDetalhe() {
         film_id: filmId,
         mode,
       }),
+    });
+
+    let payload = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
     }
-  );
 
-  let payload = null;
+    if (!response.ok) {
+      throw new Error(
+        payload?.error ||
+          payload?.message ||
+          "Não foi possível iniciar o processamento do filme."
+      );
+    }
 
-  try {
-    payload = await response.json();
-  } catch (_) {
-    payload = null;
+    return payload;
   }
 
-  if (!response.ok) {
-    throw new Error(
-      payload?.error ||
-        payload?.message ||
-        "Não foi possível iniciar o processamento do filme."
-    );
-  }
-
-  return payload;
-}
   async function handleGenerateFilm(mode = "unused_only") {
     if (!event?.id || generatingFilm || hasProcessingFilm) return;
 
@@ -365,55 +357,48 @@ export default function MeuEventoDetalhe() {
         filmId = await createQueuedFilm(
           event.id,
           authUser?.id || null,
-          selectedFilmDuration,
-          selectedMusicStyle
+          selectedFilmDuration
         );
       } else {
-        const { error: rpcError } = await supabase.rpc(
+        const { data: rpcData, error: rpcError } = await supabase.rpc(
           "generate_event_film_from_unused_public_photos",
           {
             p_event_id: event.id,
             p_created_by: authUser?.id || null,
             p_title: null,
-            p_style: "cinematic",
+            p_style: "slideshow",
             p_format: "mp4",
           }
         );
 
         if (rpcError) throw rpcError;
 
-        const { data: queuedFilm, error: queuedFilmError } = await supabase
-          .from("event_films")
-          .select("id")
-          .eq("event_id", event.id)
-          .eq("status", "queued")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        filmId = rpcData?.id || rpcData || null;
 
-        if (queuedFilmError) throw queuedFilmError;
-        if (!queuedFilm?.id) {
-          throw new Error("Não foi possível localizar o filme na fila.");
+        if (!filmId) {
+          const { data: newestQueued, error: newestQueuedError } = await supabase
+            .from("event_films")
+            .select("id")
+            .eq("event_id", event.id)
+            .eq("status", "queued")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (newestQueuedError) throw newestQueuedError;
+          filmId = newestQueued?.id || null;
         }
 
-        filmId = queuedFilm.id;
+        filmId = await updateQueuedFilmDurationById(filmId, selectedFilmDuration);
+      }
 
-        await supabase
-          .from("event_films")
-          .update({
-            duration_seconds: selectedFilmDuration,
-            style: selectedMusicStyle,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", filmId);
+      if (!filmId) {
+        throw new Error("Não foi possível identificar o filme criado para processar.");
       }
 
       await triggerFilmProcessing(filmId, mode);
       await loadFilmsData(event.id);
-
-      setTimeout(() => {
-        loadFilmsData(event.id);
-      }, 2500);
+      await pollFilmUntilFinish(event.id);
     } catch (err) {
       console.error("Erro ao gerar filme:", err);
       setError(err?.message || "Não foi possível gerar o filme.");
@@ -527,10 +512,37 @@ export default function MeuEventoDetalhe() {
   }
 
   function getFilmItemsByFilmId(filmId) {
-    return filmItems.filter((item) => {
-      const mediaType = String(item.media_type || "").toLowerCase();
-      return item.film_id === filmId && mediaType.includes("video");
-    });
+    return filmItems.filter((item) => item.film_id === filmId);
+  }
+
+  function isVideoMedia(item) {
+    const mediaType = String(item?.media_type || "").toLowerCase();
+    const mediaPath = String(item?.media_path || "").toLowerCase();
+
+    return (
+      mediaType.includes("video") ||
+      mediaPath.endsWith(".mp4") ||
+      mediaPath.endsWith(".mov") ||
+      mediaPath.endsWith(".webm")
+    );
+  }
+
+  function getFilmStatusStyle(status) {
+    const normalized = String(status || "").toLowerCase();
+
+    if (normalized === "error" || normalized === "failed") {
+      return styles.filmStatusError;
+    }
+
+    if (normalized === "queued" || normalized === "processing") {
+      return styles.filmStatusPending;
+    }
+
+    if (normalized === "completed" || normalized === "ready") {
+      return styles.filmStatusReady;
+    }
+
+    return styles.filmStatusPending;
   }
 
   function getFilmStatusLabel(status) {
@@ -549,15 +561,6 @@ export default function MeuEventoDetalhe() {
     }
 
     return status || "Sem status";
-  }
-
-  function getMusicStyleLabel(style) {
-    const normalized = String(style || "").toLowerCase();
-    return (
-      FILM_MUSIC_OPTIONS.find((option) => option.value === normalized)?.label ||
-      style ||
-      "Romântica"
-    );
   }
 
   if (authChecked && !user && !loading) {
@@ -846,22 +849,6 @@ export default function MeuEventoDetalhe() {
                         </select>
                       </label>
 
-                      <label style={styles.durationLabel}>
-                        Música
-                        <select
-                          value={selectedMusicStyle}
-                          onChange={(event) => setSelectedMusicStyle(event.target.value)}
-                          style={styles.durationSelect}
-                          disabled={generatingFilm || hasProcessingFilm}
-                        >
-                          {FILM_MUSIC_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-
                       <button
                         type="button"
                         onClick={() => handleGenerateFilm("unused_only")}
@@ -907,9 +894,11 @@ export default function MeuEventoDetalhe() {
                       {sortedFilms.map((film) => {
                         const outputUrl = getFilmOutputUrl(film);
                         const previews = getFilmItemsByFilmId(film.id);
+                        const firstPreview = previews[0] || null;
                         const firstPreviewUrl = getPublicMediaUrl(
-                          previews[0]?.media_path
+                          firstPreview?.media_path
                         );
+                        const firstPreviewIsVideo = isVideoMedia(firstPreview);
 
                         return (
                           <div key={film.id} style={styles.filmCard}>
@@ -922,12 +911,20 @@ export default function MeuEventoDetalhe() {
                                   preload="metadata"
                                 />
                               ) : firstPreviewUrl ? (
-                                <video
-                                  src={firstPreviewUrl}
-                                  style={styles.filmVideo}
-                                  controls
-                                  preload="metadata"
-                                />
+                                firstPreviewIsVideo ? (
+                                  <video
+                                    src={firstPreviewUrl}
+                                    style={styles.filmVideo}
+                                    controls
+                                    preload="metadata"
+                                  />
+                                ) : (
+                                  <img
+                                    src={firstPreviewUrl}
+                                    alt={film.title || "Prévia do filme"}
+                                    style={styles.filmVideo}
+                                  />
+                                )
                               ) : (
                                 <div style={styles.filmFallback}>
                                   <PlayCircle size={30} />
@@ -944,15 +941,7 @@ export default function MeuEventoDetalhe() {
                                 <span
                                   style={{
                                     ...styles.filmStatusBadge,
-                                    ...(String(film.status || "")
-                                      .toLowerCase()
-                                      .includes("error")
-                                      ? styles.filmStatusError
-                                      : String(film.status || "")
-                                          .toLowerCase()
-                                          .includes("process")
-                                      ? styles.filmStatusPending
-                                      : styles.filmStatusReady),
+                                    ...getFilmStatusStyle(film.status),
                                   }}
                                 >
                                   {getFilmStatusLabel(film.status)}
@@ -960,7 +949,7 @@ export default function MeuEventoDetalhe() {
                               </div>
 
                               <div style={styles.filmMetaRow}>
-                                <span>{getMusicStyleLabel(film.style)}</span>
+                                <span>{film.style || "Estilo padrão"}</span>
                                 <span>
                                   {film.duration_seconds
                                     ? `${film.duration_seconds}s`
