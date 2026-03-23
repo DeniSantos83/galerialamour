@@ -248,6 +248,15 @@ exports.handler = async function (event) {
 
     console.log("Status alterado para processing.");
 
+    const { error: cleanupCurrentItemsError } = await supabase
+      .from("event_film_items")
+      .delete()
+      .eq("film_id", film.id);
+
+    if (cleanupCurrentItemsError) throw cleanupCurrentItemsError;
+
+    console.log("Itens antigos do filme atual removidos.");
+
     const { data: uploads, error: uploadsError } = await supabase
       .from("uploads")
       .select("*")
@@ -276,14 +285,28 @@ exports.handler = async function (event) {
       .select(`
         media_id,
         film_id,
-        event_films!inner(event_id)
+        event_films!inner(id, event_id, status)
       `);
 
     if (usedMediaError) throw usedMediaError;
 
     const usedMediaIds = new Set(
       (usedMediaRows || [])
-        .filter((row) => row.event_films?.event_id === film.event_id)
+        .filter((row) => {
+          const relatedFilm = Array.isArray(row.event_films)
+            ? row.event_films[0]
+            : row.event_films;
+
+          if (!relatedFilm) return false;
+
+          const sameEvent = relatedFilm.event_id === film.event_id;
+          const notCurrentFilm = relatedFilm.id !== film.id;
+          const alreadyCompleted =
+            relatedFilm.status === "completed" ||
+            relatedFilm.status === "ready";
+
+          return sameEvent && notCurrentFilm && alreadyCompleted;
+        })
         .map((row) => row.media_id)
         .filter(Boolean)
     );
@@ -298,7 +321,7 @@ exports.handler = async function (event) {
 
     if (requestMode === "allow_reuse") {
       if (unusedImages.length > 0) {
-        selectedSourceImages = unusedImages;
+        selectedSourceImages = shuffleArray(unusedImages);
       } else {
         console.log("Sem imagens inéditas. Reutilizando imagens aprovadas.");
         selectedSourceImages = shuffleArray(approvedImages);
@@ -310,7 +333,7 @@ exports.handler = async function (event) {
         );
       }
 
-      selectedSourceImages = unusedImages;
+      selectedSourceImages = shuffleArray(unusedImages);
     }
 
     if (!selectedSourceImages.length) {
@@ -326,13 +349,6 @@ exports.handler = async function (event) {
     console.log("Duração total desejada:", totalDuration);
     console.log("Limite de imagens para essa duração:", maxImages);
     console.log("Imagens selecionadas:", selectedImages.length);
-
-    const { error: deleteItemsError } = await supabase
-      .from("event_film_items")
-      .delete()
-      .eq("film_id", film.id);
-
-    if (deleteItemsError) throw deleteItemsError;
 
     const itemsPayload = selectedImages.map((item, index) => ({
       film_id: film.id,
