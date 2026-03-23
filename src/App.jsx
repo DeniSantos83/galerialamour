@@ -10,6 +10,7 @@ import PublicGalleryPage from "./pages/PublicGalleryPage"
 import MeusEventos from "./pages/MeusEventos"
 import MeuEventoDetalhe from "./pages/MeuEventoDetalhe"
 import NotFound from "./pages/NotFound"
+import EventSlideshowPage from "./pages/EventSlideshowPage";
 
 export default function App() {
   return (
@@ -28,6 +29,9 @@ export default function App() {
 
         <Route path="/meus-eventos" element={<MeusEventos />} />
         <Route path="/meus-eventos/:slug" element={<MeuEventoDetalhe />} />
+
+        <Route path="/telao/:slug" element={<EventSlideshowPage />} />
+        <Route path="/evento/:slug/telao" element={<EventSlideshowPage />} />
 
         <Route path="*" element={<NotFound />} />
 

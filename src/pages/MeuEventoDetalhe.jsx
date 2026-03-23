@@ -9,6 +9,7 @@ import {
   Instagram,
   Link2,
   MessageCircle,
+  MonitorPlay,
   PlayCircle,
   Settings,
   Sparkles,
@@ -774,35 +775,47 @@ export default function MeuEventoDetalhe() {
                   </div>
 
                   <div style={styles.quickActions}>
-                    <a
-                      href={urls.uploadUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.primaryLinkButton}
-                    >
-                      <ExternalLink size={16} />
-                      Abrir upload
-                    </a>
+  <a
+    href={urls.uploadUrl}
+    target="_blank"
+    rel="noreferrer"
+    style={styles.primaryLinkButton}
+  >
+    <ExternalLink size={16} />
+    Abrir upload
+  </a>
 
-                    <a
-                      href={urls.privateGalleryUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.secondaryLinkButton}
-                    >
-                      <ImageIcon size={16} />
-                      Galeria privada
-                    </a>
+  <a
+    href={urls.privateGalleryUrl}
+    target="_blank"
+    rel="noreferrer"
+    style={styles.secondaryLinkButton}
+  >
+    <ImageIcon size={16} />
+    Galeria privada
+  </a>
 
-                    <a
-                      href={urls.publicGalleryUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.secondaryLinkButton}
-                    >
-                      <Globe size={16} />
-                      Galeria pública
-                    </a>
+  <a
+    href={urls.publicGalleryUrl}
+    target="_blank"
+    rel="noreferrer"
+    style={styles.secondaryLinkButton}
+  >
+    <Globe size={16} />
+    Galeria pública
+  </a>
+
+  
+
+  <a
+    href={`/telao/${event.slug}`}
+    target="_blank"
+    rel="noreferrer"
+    style={styles.slideshowButton}
+  >
+    <MonitorPlay size={16} />
+    Abrir modo telão
+  </a>
 
                     <Link
                       to={`/evento/${event.slug}/configuracoes`}
@@ -811,6 +824,7 @@ export default function MeuEventoDetalhe() {
                       <Settings size={16} />
                       Configurações
                     </Link>
+                    
                   </div>
                 </div>
 
@@ -1745,4 +1759,19 @@ const styles = {
     color: "#1f2333",
     fontSize: "14px",
   },
+  slideshowButton: {
+  minHeight: "50px",
+  borderRadius: "16px",
+  border: "1px solid rgba(124, 58, 237, 0.18)",
+  background: "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
+  color: "#fff",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  textDecoration: "none",
+  fontWeight: 800,
+  padding: "0 16px",
+  boxShadow: "0 14px 30px rgba(124, 58, 237, 0.22)",
+},
 };
