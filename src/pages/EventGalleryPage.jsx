@@ -657,9 +657,9 @@ export default function EventGalleryPage() {
             </p>
           </section>
         ) : (
-          <section className="columns-1 gap-4 space-y-4 sm:columns-2 lg:columns-3 xl:columns-4">
+          <section className="grid grid-cols-3 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
             {filteredItems.map((item) => (
-              <div key={item.id} className="break-inside-avoid">
+             <div key={item.id} className="min-w-0">
                 <MediaCard
                   item={item}
                   onOpen={setSelectedItem}
