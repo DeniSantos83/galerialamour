@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -14,7 +14,7 @@ import {
   UserCircle2,
   LogOut,
   Upload,
-  ImagePlus,
+  PlusCircle,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -51,8 +51,12 @@ export default function EventSettings() {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
+  const coverInputRef = useRef(null);
+  const logoInputRef = useRef(null);
+
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [currentPartner, setCurrentPartner] = useState(null);
 
   const [eventData, setEventData] = useState(null);
   const [settingsId, setSettingsId] = useState(null);
@@ -118,6 +122,7 @@ export default function EventSettings() {
       if (!authUser) {
         setUser(null);
         setProfile(null);
+        setCurrentPartner(null);
         setEventData(null);
         return;
       }
@@ -133,6 +138,31 @@ export default function EventSettings() {
       if (profileError) throw profileError;
 
       setProfile(profileData || null);
+
+      let linkedPartner = null;
+
+      const { data: partnerByProfile, error: partnerByProfileError } = await supabase
+        .from("partners")
+        .select("*")
+        .eq("profile_id", authUser.id)
+        .maybeSingle();
+
+      if (partnerByProfileError) throw partnerByProfileError;
+
+      if (partnerByProfile) {
+        linkedPartner = partnerByProfile;
+      } else if (authUser.email) {
+        const { data: partnerByEmail, error: partnerByEmailError } = await supabase
+          .from("partners")
+          .select("*")
+          .eq("email", authUser.email.toLowerCase())
+          .maybeSingle();
+
+        if (partnerByEmailError) throw partnerByEmailError;
+        linkedPartner = partnerByEmail || null;
+      }
+
+      setCurrentPartner(linkedPartner);
 
       const { data: foundEvent, error: eventError } = await supabase
         .from("events")
@@ -168,9 +198,10 @@ export default function EventSettings() {
 
       const isAdminUser = profileData?.role === "admin";
       const isOwner = foundEvent.created_by === authUser.id;
-      const isPartner = foundEvent.partner_id === authUser.id;
+      const isLinkedPartner =
+        Boolean(linkedPartner?.id) && foundEvent.partner_id === linkedPartner.id;
 
-      if (!isAdminUser && !isOwner && !isPartner) {
+      if (!isAdminUser && !isOwner && !isLinkedPartner) {
         setErrorMessage("Você não tem permissão para acessar este evento.");
         return;
       }
@@ -298,7 +329,7 @@ export default function EventSettings() {
       const filePath = `${eventData.id}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("event-images")
+        .from("event-assets")
         .upload(filePath, file, {
           upsert: true,
           contentType: file.type,
@@ -307,7 +338,7 @@ export default function EventSettings() {
       if (uploadError) throw uploadError;
 
       const { data: publicUrlData } = supabase.storage
-        .from("event-images")
+        .from("event-assets")
         .getPublicUrl(filePath);
 
       const publicUrl = publicUrlData?.publicUrl || "";
@@ -585,6 +616,7 @@ export default function EventSettings() {
   }
 
   const displayName =
+    currentPartner?.studio_name ||
     profile?.studio_name ||
     profile?.full_name ||
     profile?.["full-name"] ||
@@ -809,131 +841,182 @@ export default function EventSettings() {
                   </div>
 
                   <div style={styles.fullWidth}>
-                    <div style={styles.uploadGroup}>
-                      <label style={styles.field}>
-                        <span style={styles.label}>URL da capa</span>
-                        <input
-                          type="text"
-                          name="cover_url"
-                          value={eventForm.cover_url}
-                          onChange={handleEventChange}
-                          style={styles.input}
-                          placeholder="https://..."
-                        />
-                      </label>
+                    <div style={styles.visualIdentityBox}>
+                      <div style={styles.visualIdentityHeader}>
+                        <div>
+                          <p style={styles.kicker}>Identidade visual</p>
+                          <h3 style={styles.visualIdentityTitle}>Capa, logo e cores</h3>
+                        </div>
+                        <span style={styles.visualIdentityPill}>Preview em tempo real</span>
+                      </div>
 
-                      <label style={styles.field}>
-                        <span style={styles.label}>Upload da capa</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          style={styles.fileInput}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleImageUpload(file, "cover");
+                      <div style={styles.assetGrid}>
+                        <div style={styles.assetField}>
+                          <span style={styles.label}>Capa do evento</span>
+                          <input
+                            ref={coverInputRef}
+                            type="file"
+                            accept="image/*"
+                            style={styles.hiddenFileInput}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleImageUpload(file, "cover");
+                              e.target.value = "";
+                            }}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => coverInputRef.current?.click()}
+                            style={{
+                              ...styles.uploadDropBox,
+                              ...styles.coverDropBox,
+                              ...(eventForm.cover_url
+                                ? {
+                                    backgroundImage: `linear-gradient(rgba(30,36,64,0.18), rgba(30,36,64,0.42)), url(${eventForm.cover_url})`,
+                                    backgroundSize: "cover",
+                                    backgroundPosition: "center",
+                                    borderStyle: "solid",
+                                  }
+                                : {}),
+                            }}
+                            disabled={uploadingCover}
+                          >
+                            <span style={styles.uploadIconCircle}>
+                              {uploadingCover ? <Upload size={24} /> : <PlusCircle size={28} />}
+                            </span>
+                            <strong style={styles.uploadDropTitle}>
+                              {eventForm.cover_url
+                                ? uploadingCover
+                                  ? "Enviando capa..."
+                                  : "Trocar capa"
+                                : "Adicionar capa"}
+                            </strong>
+                            <span style={styles.uploadDropText}>PNG, JPG ou WEBP</span>
+                          </button>
+
+                          <input
+                            type="text"
+                            name="cover_url"
+                            value={eventForm.cover_url}
+                            onChange={handleEventChange}
+                            style={styles.compactUrlInput}
+                            placeholder="Ou cole a URL da capa"
+                          />
+                        </div>
+
+                        <div style={styles.assetField}>
+                          <span style={styles.label}>Logo da festa</span>
+                          <input
+                            ref={logoInputRef}
+                            type="file"
+                            accept="image/*"
+                            style={styles.hiddenFileInput}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleImageUpload(file, "logo");
+                              e.target.value = "";
+                            }}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => logoInputRef.current?.click()}
+                            style={{
+                              ...styles.uploadDropBox,
+                              ...styles.logoDropBox,
+                              background: eventForm.logo_url
+                                ? "linear-gradient(135deg, #ffffff 0%, #f8f6f2 100%)"
+                                : "linear-gradient(135deg, #fffaf4 0%, #f5efe5 100%)",
+                            }}
+                            disabled={uploadingLogo}
+                          >
+                            {eventForm.logo_url ? (
+                              <img
+                                src={eventForm.logo_url}
+                                alt="Logo do evento"
+                                style={styles.logoDropPreview}
+                              />
+                            ) : (
+                              <span style={styles.uploadIconCircle}>
+                                {uploadingLogo ? <Upload size={24} /> : <PlusCircle size={28} />}
+                              </span>
+                            )}
+
+                            <strong style={styles.uploadDropTitleDark}>
+                              {eventForm.logo_url
+                                ? uploadingLogo
+                                  ? "Enviando logo..."
+                                  : "Trocar logo"
+                                : "Adicionar logo"}
+                            </strong>
+                            <span style={styles.uploadDropTextDark}>Ideal: PNG transparente</span>
+                          </button>
+
+                          <input
+                            type="text"
+                            name="logo_url"
+                            value={eventForm.logo_url}
+                            onChange={handleEventChange}
+                            style={styles.compactUrlInput}
+                            placeholder="Ou cole a URL da logo"
+                          />
+                        </div>
+                      </div>
+
+                      <div style={styles.galleryPreviewCard}>
+                        <div
+                          style={{
+                            ...styles.galleryPreviewCover,
+                            background: eventForm.cover_url
+                              ? `linear-gradient(rgba(30,36,64,0.28), rgba(30,36,64,0.74)), url(${eventForm.cover_url}) center/cover`
+                              : `linear-gradient(135deg, ${eventForm.primary_color} 0%, ${eventForm.accent_color} 100%)`,
                           }}
-                        />
-                        <span style={styles.uploadHint}>
-                          {uploadingCover
-                            ? "Enviando capa..."
-                            : "Selecione uma imagem para capa"}
-                        </span>
-                      </label>
-                    </div>
-                  </div>
+                        >
+                          <div style={styles.galleryPreviewBadge}>L’Amour Galeria</div>
+                          {eventForm.logo_url ? (
+                            <img
+                              src={eventForm.logo_url}
+                              alt="Logo na prévia"
+                              style={styles.galleryPreviewLogo}
+                            />
+                          ) : (
+                            <div style={styles.galleryPreviewLogoEmpty}>Logo</div>
+                          )}
+                          <h3 style={styles.galleryPreviewTitle}>
+                            {eventForm.name || "Nome do evento"}
+                          </h3>
+                          <p style={styles.galleryPreviewText}>
+                            {eventForm.description || "Prévia da página de upload e galeria."}
+                          </p>
+                        </div>
+                      </div>
 
-                  <div style={styles.fullWidth}>
-                    <div style={styles.uploadGroup}>
-                      <label style={styles.field}>
-                        <span style={styles.label}>URL da logo</span>
-                        <input
-                          type="text"
-                          name="logo_url"
-                          value={eventForm.logo_url}
+                      <div style={styles.colorGrid}>
+                        <ColorPickerCard
+                          label="Cor principal"
+                          name="primary_color"
+                          value={eventForm.primary_color}
                           onChange={handleEventChange}
-                          style={styles.input}
-                          placeholder="https://..."
+                          hint="Fundo e títulos"
                         />
-                      </label>
-
-                      <label style={styles.field}>
-                        <span style={styles.label}>Upload da logo</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          style={styles.fileInput}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleImageUpload(file, "logo");
-                          }}
+                        <ColorPickerCard
+                          label="Cor secundária"
+                          name="secondary_color"
+                          value={eventForm.secondary_color}
+                          onChange={handleEventChange}
+                          hint="Base clara"
                         />
-                        <span style={styles.uploadHint}>
-                          {uploadingLogo
-                            ? "Enviando logo..."
-                            : "Selecione uma imagem para logo"}
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {eventForm.cover_url ? (
-                    <div style={styles.fullWidth}>
-                      <div style={styles.previewBox}>
-                        <span style={styles.infoLabel}>Prévia da capa</span>
-                        <img
-                          src={eventForm.cover_url}
-                          alt="Prévia da capa"
-                          style={styles.previewImage}
+                        <ColorPickerCard
+                          label="Cor de destaque"
+                          name="accent_color"
+                          value={eventForm.accent_color}
+                          onChange={handleEventChange}
+                          hint="Botões e detalhes"
                         />
                       </div>
                     </div>
-                  ) : null}
-
-                  {eventForm.logo_url ? (
-                    <div style={styles.fullWidth}>
-                      <div style={styles.previewBox}>
-                        <span style={styles.infoLabel}>Prévia da logo</span>
-                        <img
-                          src={eventForm.logo_url}
-                          alt="Prévia da logo"
-                          style={styles.previewLogo}
-                        />
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <label style={styles.field}>
-                    <span style={styles.label}>Cor principal</span>
-                    <input
-                      type="color"
-                      name="primary_color"
-                      value={eventForm.primary_color}
-                      onChange={handleEventChange}
-                      style={styles.colorInput}
-                    />
-                  </label>
-
-                  <label style={styles.field}>
-                    <span style={styles.label}>Cor secundária</span>
-                    <input
-                      type="color"
-                      name="secondary_color"
-                      value={eventForm.secondary_color}
-                      onChange={handleEventChange}
-                      style={styles.colorInput}
-                    />
-                  </label>
-
-                  <label style={styles.field}>
-                    <span style={styles.label}>Cor de destaque</span>
-                    <input
-                      type="color"
-                      name="accent_color"
-                      value={eventForm.accent_color}
-                      onChange={handleEventChange}
-                      style={styles.colorInput}
-                    />
-                  </label>
+                  </div>
 
                   <div style={styles.fullWidth}>
                     <label style={styles.field}>
@@ -1143,6 +1226,31 @@ function StatusRow({ icon, label, value }) {
       </div>
       <strong style={styles.statusValue}>{value}</strong>
     </div>
+  );
+}
+
+function ColorPickerCard({ label, name, value, onChange, hint }) {
+  return (
+    <label style={styles.colorCard}>
+      <span style={styles.colorCardTop}>
+        <span style={{ ...styles.colorDot, background: value }} />
+        <span>
+          <strong style={styles.colorCardLabel}>{label}</strong>
+          <small style={styles.colorCardHint}>{hint}</small>
+        </span>
+      </span>
+
+      <span style={styles.colorValueRow}>
+        <input
+          type="color"
+          name={name}
+          value={value}
+          onChange={onChange}
+          style={styles.colorPickerNative}
+        />
+        <span style={styles.colorHex}>{value}</span>
+      </span>
+    </label>
   );
 }
 
@@ -1530,6 +1638,251 @@ const styles = {
     maxHeight: "100px",
     objectFit: "contain",
     display: "block",
+  },
+  visualIdentityBox: {
+    background: "linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,246,242,0.9) 100%)",
+    border: "1px solid rgba(30,36,64,0.08)",
+    borderRadius: "26px",
+    padding: "18px",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8)",
+  },
+  visualIdentityHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    flexWrap: "wrap",
+    marginBottom: "16px",
+  },
+  visualIdentityTitle: {
+    margin: "6px 0 0",
+    color: "#1f2333",
+    fontSize: "20px",
+  },
+  visualIdentityPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: "32px",
+    borderRadius: "999px",
+    padding: "0 12px",
+    background: "#fff7ec",
+    border: "1px solid #ead5b5",
+    color: "#8a643e",
+    fontSize: "12px",
+    fontWeight: 800,
+  },
+  assetGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "14px",
+  },
+  assetField: {
+    display: "grid",
+    gap: "8px",
+    minWidth: 0,
+  },
+  hiddenFileInput: {
+    display: "none",
+  },
+  uploadDropBox: {
+    width: "100%",
+    minHeight: "190px",
+    borderRadius: "24px",
+    border: "1.5px dashed #d5c3aa",
+    background: "linear-gradient(135deg, #fffaf4 0%, #f5efe5 100%)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    cursor: "pointer",
+    padding: "18px",
+    boxSizing: "border-box",
+    textAlign: "center",
+    color: "#fff",
+    overflow: "hidden",
+    position: "relative",
+    boxShadow: "0 14px 30px rgba(24,32,79,0.06)",
+  },
+  coverDropBox: {
+    minHeight: "210px",
+  },
+  logoDropBox: {
+    minHeight: "210px",
+    color: "#1f2333",
+  },
+  uploadIconCircle: {
+    width: "58px",
+    height: "58px",
+    borderRadius: "20px",
+    background: "rgba(255,255,255,0.88)",
+    color: "#8a643e",
+    display: "grid",
+    placeItems: "center",
+    boxShadow: "0 12px 26px rgba(24,32,79,0.12)",
+  },
+  uploadDropTitle: {
+    fontSize: "16px",
+    color: "#fff",
+    textShadow: "0 2px 10px rgba(0,0,0,0.25)",
+  },
+  uploadDropTitleDark: {
+    fontSize: "16px",
+    color: "#1f2333",
+  },
+  uploadDropText: {
+    fontSize: "13px",
+    color: "rgba(255,255,255,0.86)",
+    textShadow: "0 2px 8px rgba(0,0,0,0.2)",
+  },
+  uploadDropTextDark: {
+    fontSize: "13px",
+    color: "#7c8295",
+  },
+  logoDropPreview: {
+    width: "100%",
+    maxWidth: "170px",
+    maxHeight: "96px",
+    objectFit: "contain",
+    display: "block",
+    marginBottom: "6px",
+  },
+  compactUrlInput: {
+    width: "100%",
+    height: "42px",
+    borderRadius: "14px",
+    border: "1px solid #e4dfd7",
+    padding: "0 12px",
+    outline: "none",
+    fontSize: "13px",
+    background: "rgba(255,255,255,0.9)",
+    boxSizing: "border-box",
+  },
+  galleryPreviewCard: {
+    marginTop: "16px",
+    borderRadius: "26px",
+    overflow: "hidden",
+    border: "1px solid rgba(30,36,64,0.08)",
+    boxShadow: "0 16px 38px rgba(24,32,79,0.08)",
+  },
+  galleryPreviewCover: {
+    minHeight: "260px",
+    padding: "22px",
+    color: "#fff",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "flex-end",
+    position: "relative",
+    boxSizing: "border-box",
+  },
+  galleryPreviewBadge: {
+    position: "absolute",
+    top: "18px",
+    left: "18px",
+    borderRadius: "999px",
+    background: "rgba(255,255,255,0.14)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    backdropFilter: "blur(8px)",
+    color: "#ffe6b6",
+    padding: "7px 12px",
+    fontSize: "12px",
+    fontWeight: 800,
+  },
+  galleryPreviewLogo: {
+    maxWidth: "170px",
+    maxHeight: "78px",
+    objectFit: "contain",
+    display: "block",
+    marginBottom: "16px",
+  },
+  galleryPreviewLogoEmpty: {
+    width: "88px",
+    height: "48px",
+    borderRadius: "14px",
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid rgba(255,255,255,0.25)",
+    background: "rgba(255,255,255,0.12)",
+    color: "rgba(255,255,255,0.78)",
+    fontSize: "12px",
+    fontWeight: 800,
+    marginBottom: "16px",
+  },
+  galleryPreviewTitle: {
+    margin: 0,
+    fontSize: "28px",
+    lineHeight: 1.1,
+    textShadow: "0 2px 16px rgba(0,0,0,0.28)",
+  },
+  galleryPreviewText: {
+    margin: "10px 0 0",
+    maxWidth: "520px",
+    color: "rgba(255,255,255,0.84)",
+    fontSize: "14px",
+    lineHeight: 1.5,
+  },
+  colorGrid: {
+    marginTop: "16px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gap: "12px",
+  },
+  colorCard: {
+    background: "#fff",
+    border: "1px solid #e8e2d9",
+    borderRadius: "20px",
+    padding: "14px",
+    display: "grid",
+    gap: "12px",
+    cursor: "pointer",
+    boxShadow: "0 10px 24px rgba(24,32,79,0.04)",
+  },
+  colorCardTop: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  },
+  colorDot: {
+    width: "38px",
+    height: "38px",
+    borderRadius: "14px",
+    border: "1px solid rgba(30,36,64,0.12)",
+    boxShadow: "inset 0 0 0 3px rgba(255,255,255,0.6)",
+    flex: "0 0 auto",
+  },
+  colorCardLabel: {
+    display: "block",
+    color: "#1f2333",
+    fontSize: "13px",
+  },
+  colorCardHint: {
+    display: "block",
+    color: "#7c8295",
+    fontSize: "12px",
+    marginTop: "2px",
+  },
+  colorValueRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    background: "#f8f6f2",
+    border: "1px solid #eee9e1",
+    borderRadius: "14px",
+    padding: "6px 8px",
+  },
+  colorPickerNative: {
+    width: "36px",
+    height: "32px",
+    border: "none",
+    padding: 0,
+    background: "transparent",
+    cursor: "pointer",
+  },
+  colorHex: {
+    color: "#4d5367",
+    fontSize: "13px",
+    fontWeight: 800,
+    textTransform: "uppercase",
   },
   inputDisabled: {
     background: "#f2f3f7",

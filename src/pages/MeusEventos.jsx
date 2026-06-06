@@ -893,13 +893,31 @@ export default function MeusEventos() {
                       to={`/meus-eventos/${selectedEvent.slug}`}
                       style={styles.actionTile}
                     >
-                      <Settings size={16} />
+                      <ExternalLink size={16} />
                       <div>
                         <strong style={styles.actionTileTitle}>
                           Ver detalhes
                         </strong>
                         <span style={styles.actionTileText}>
                           Abrir painel detalhado deste evento
+                        </span>
+                      </div>
+                    </Link>
+
+                    <Link
+                      to={`/evento/${selectedEvent.slug}/configuracoes`}
+                      style={{
+                        ...styles.actionTile,
+                        ...styles.actionTileConfig,
+                      }}
+                    >
+                      <Settings size={16} />
+                      <div>
+                        <strong style={styles.actionTileTitle}>
+                          Configurar evento
+                        </strong>
+                        <span style={styles.actionTileText}>
+                          Editar capa, logo, cores, upload e regras
                         </span>
                       </div>
                     </Link>
@@ -1762,6 +1780,11 @@ const styles = {
     alignItems: "flex-start",
     textDecoration: "none",
     color: "#1f2333",
+  },
+  actionTileConfig: {
+    border: "1px solid rgba(176,137,104,0.38)",
+    background: "linear-gradient(135deg, #fffaf4 0%, #f4ece1 100%)",
+    boxShadow: "0 12px 26px rgba(176,137,104,0.14)",
   },
   actionTileTitle: {
     display: "block",

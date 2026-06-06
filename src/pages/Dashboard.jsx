@@ -17,10 +17,16 @@ import {
   CalendarDays,
   Menu,
   X,
+  UploadCloud,
+  Image as ImageIcon,
+  Palette,
+  Sparkles,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { slugify } from "../lib/utils";
 import PartnersPage from "./PartnersPage";
+
+const EVENT_ASSETS_BUCKET = "event-assets";
 
 const initialForm = {
   name: "",
@@ -76,6 +82,7 @@ export default function Dashboard() {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState("");
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 900;
@@ -238,6 +245,69 @@ export default function Dashboard() {
       partner_id: value,
       partner_name: partner?.studio_name || "",
     }));
+  }
+
+  async function handleImageUpload(event, fieldName) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setMessage("Selecione um arquivo de imagem válido.");
+      return;
+    }
+
+    const maxSizeMb = 8;
+    const maxSizeBytes = maxSizeMb * 1024 * 1024;
+
+    if (file.size > maxSizeBytes) {
+      setMessage(`A imagem precisa ter no máximo ${maxSizeMb}MB.`);
+      return;
+    }
+
+    try {
+      setUploadingMedia(fieldName);
+      setMessage("");
+
+      const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const safeName = slugify(file.name.replace(/\.[^/.]+$/, "")) || "imagem";
+      const folder = slug || "novo-evento";
+      const path = `${user?.id || "admin"}/${folder}/${fieldName}-${Date.now()}-${safeName}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(EVENT_ASSETS_BUCKET)
+        .upload(path, file, {
+          cacheControl: "3600",
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from(EVENT_ASSETS_BUCKET)
+        .getPublicUrl(path);
+
+      if (!data?.publicUrl) {
+        throw new Error("Não foi possível gerar a URL pública da imagem.");
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        [fieldName]: data.publicUrl,
+      }));
+
+      setMessage(fieldName === "cover_url" ? "Capa enviada com sucesso." : "Logo enviada com sucesso.");
+    } catch (error) {
+      console.error("Erro ao enviar imagem:", error);
+      setMessage(
+        error.message ||
+          `Erro ao enviar imagem. Verifique se o bucket ${EVENT_ASSETS_BUCKET} existe no Supabase.`
+      );
+    } finally {
+      setUploadingMedia("");
+    }
   }
 
   async function handleCreateEvent(e) {
@@ -598,57 +668,109 @@ export default function Dashboard() {
                   </select>
                 </Field>
 
-                <Field label="URL da capa">
-                  <input
-                    type="text"
-                    name="cover_url"
-                    value={form.cover_url}
-                    onChange={handleChange}
-                    style={styles.input}
-                    placeholder="https://..."
-                  />
-                </Field>
+                <div style={styles.fullWidth}>
+                  <div
+                    style={{
+                      ...styles.visualGrid,
+                      gridTemplateColumns: isSmallMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                    }}
+                  >
+                    <ImageUrlCard
+                      label="Capa da festa"
+                      name="cover_url"
+                      value={form.cover_url}
+                      onChange={handleChange}
+                      onUpload={(event) => handleImageUpload(event, "cover_url")}
+                      uploading={uploadingMedia === "cover_url"}
+                      placeholder="Cole aqui a URL da imagem de capa"
+                      type="cover"
+                    />
 
-                <Field label="URL da logo">
-                  <input
-                    type="text"
-                    name="logo_url"
-                    value={form.logo_url}
-                    onChange={handleChange}
-                    style={styles.input}
-                    placeholder="https://..."
-                  />
-                </Field>
+                    <ImageUrlCard
+                      label="Logo da festa"
+                      name="logo_url"
+                      value={form.logo_url}
+                      onChange={handleChange}
+                      onUpload={(event) => handleImageUpload(event, "logo_url")}
+                      uploading={uploadingMedia === "logo_url"}
+                      placeholder="Cole aqui a URL da logo ou monograma"
+                      type="logo"
+                    />
+                  </div>
+                </div>
 
-                <Field label="Cor principal">
-                  <input
-                    type="color"
-                    name="primary_color"
-                    value={form.primary_color}
-                    onChange={handleChange}
-                    style={styles.colorInput}
-                  />
-                </Field>
+                <div style={styles.fullWidth}>
+                  <div style={styles.appearanceCard}>
+                    <div style={styles.appearanceHeader}>
+                      <div style={styles.appearanceIcon}>
+                        <Sparkles size={18} />
+                      </div>
+                      <div>
+                        <strong style={styles.appearanceTitle}>Identidade visual da galeria</strong>
+                        <span style={styles.appearanceSubtitle}>
+                          Ajuste as cores e veja uma prévia rápida da página do evento.
+                        </span>
+                      </div>
+                    </div>
 
-                <Field label="Cor secundária">
-                  <input
-                    type="color"
-                    name="secondary_color"
-                    value={form.secondary_color}
-                    onChange={handleChange}
-                    style={styles.colorInput}
-                  />
-                </Field>
+                    <div
+                      style={{
+                        ...styles.colorGrid,
+                        gridTemplateColumns: isSmallMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                      }}
+                    >
+                      <ColorPickerCard
+                        label="Principal"
+                        name="primary_color"
+                        value={form.primary_color}
+                        onChange={handleChange}
+                        hint="Topo, botões e títulos"
+                      />
 
-                <Field label="Cor de destaque">
-                  <input
-                    type="color"
-                    name="accent_color"
-                    value={form.accent_color}
-                    onChange={handleChange}
-                    style={styles.colorInput}
-                  />
-                </Field>
+                      <ColorPickerCard
+                        label="Fundo"
+                        name="secondary_color"
+                        value={form.secondary_color}
+                        onChange={handleChange}
+                        hint="Base clara da galeria"
+                      />
+
+                      <ColorPickerCard
+                        label="Destaque"
+                        name="accent_color"
+                        value={form.accent_color}
+                        onChange={handleChange}
+                        hint="Detalhes e chamadas"
+                      />
+                    </div>
+
+                    <div
+                      style={{
+                        ...styles.galleryPreview,
+                        background: `linear-gradient(135deg, ${form.primary_color}, ${form.accent_color})`,
+                      }}
+                    >
+                      <div style={styles.galleryPreviewOverlay}>
+                        <div style={styles.galleryPreviewLogoWrap}>
+                          {form.logo_url ? (
+                            <img
+                              src={form.logo_url}
+                              alt="Prévia da logo"
+                              style={styles.galleryPreviewLogo}
+                            />
+                          ) : (
+                            <ImageIcon size={24} />
+                          )}
+                        </div>
+                        <div style={styles.galleryPreviewText}>
+                          <span style={styles.galleryPreviewBadge}>Prévia da galeria</span>
+                          <strong>{form.name || "Nome da festa"}</strong>
+                          <small>{form.partner_name || "L’Amour Fotografia"}</small>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 <div style={styles.fullWidth}>
                   <Field label="Descrição">
@@ -938,6 +1060,117 @@ function InfoBox({ label, value }) {
   );
 }
 
+function ImageUrlCard({
+  label,
+  name,
+  value,
+  onChange,
+  onUpload,
+  uploading = false,
+  placeholder,
+  type = "cover",
+}) {
+  const isCover = type === "cover";
+
+  return (
+    <div style={styles.mediaCard}>
+      <div style={styles.mediaHeader}>
+        <div style={styles.mediaIcon}>
+          <ImageIcon size={18} />
+        </div>
+        <div>
+          <span style={styles.mediaLabel}>{label}</span>
+          <small style={styles.mediaHint}>
+            {isCover
+              ? "Imagem horizontal para abrir a galeria"
+              : "Marca, brasão ou monograma do evento"}
+          </small>
+        </div>
+      </div>
+
+      <label
+        style={{
+          ...styles.uploadDropBox,
+          ...(isCover ? styles.uploadDropBoxCover : styles.uploadDropBoxLogo),
+          ...(value ? styles.uploadDropBoxWithImage : {}),
+        }}
+      >
+        <input
+          type="file"
+          accept="image/*"
+          onChange={onUpload}
+          disabled={uploading}
+          style={styles.hiddenFileInput}
+        />
+
+        {value ? (
+          <>
+            <img
+              src={value}
+              alt={`Prévia - ${label}`}
+              style={isCover ? styles.coverPreviewImage : styles.logoPreviewImage}
+            />
+            <div style={styles.uploadImageOverlay}>
+              <div style={styles.uploadPlusSmall}>
+                <PlusCircle size={22} />
+              </div>
+              <strong>{uploading ? "Enviando..." : "Trocar imagem"}</strong>
+            </div>
+          </>
+        ) : (
+          <div style={styles.uploadDropContent}>
+            <div style={styles.uploadPlusIcon}>
+              {uploading ? <UploadCloud size={32} /> : <PlusCircle size={36} />}
+            </div>
+            <strong>{uploading ? "Enviando imagem..." : isCover ? "Adicionar capa" : "Adicionar logo"}</strong>
+            <span>{isCover ? "Clique para buscar uma capa no dispositivo" : "Clique para buscar uma logo no dispositivo"}</span>
+            <small>PNG, JPG ou WEBP</small>
+          </div>
+        )}
+      </label>
+
+      <div style={styles.urlDivider}>ou cole uma URL</div>
+
+      <input
+        type="text"
+        name={name}
+        value={value}
+        onChange={onChange}
+        style={styles.mediaInput}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
+function ColorPickerCard({ label, name, value, onChange, hint }) {
+  return (
+    <label style={styles.colorCard}>
+      <div style={styles.colorTopLine}>
+        <span style={styles.colorName}>{label}</span>
+        <span style={styles.colorHex}>{value}</span>
+      </div>
+
+      <div style={styles.colorControlRow}>
+        <span style={{ ...styles.colorSwatch, background: value }} />
+        <input
+          type="color"
+          name={name}
+          value={value}
+          onChange={onChange}
+          style={styles.colorPickerNative}
+        />
+      </div>
+
+      <small style={styles.colorHint}>
+        <Palette size={13} />
+        {hint}
+      </small>
+    </label>
+  );
+}
+
+
 function LinkBox({ icon, title, url, onCopy, copied, isSmallMobile = false }) {
   return (
     <div style={styles.linkBox}>
@@ -1198,6 +1431,322 @@ const styles = {
   },
   fullWidth: {
     gridColumn: "1 / -1",
+  },
+  visualGrid: {
+    display: "grid",
+    gap: "14px",
+  },
+  mediaCard: {
+    border: "1px solid #ececf3",
+    borderRadius: "18px",
+    background: "linear-gradient(180deg, #ffffff, #fafbff)",
+    padding: "14px",
+    display: "grid",
+    gap: "12px",
+    boxShadow: "0 10px 24px rgba(30, 36, 64, 0.05)",
+    minWidth: 0,
+  },
+  mediaHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  },
+  mediaIcon: {
+    width: "38px",
+    height: "38px",
+    borderRadius: "13px",
+    background: "#fff8f3",
+    color: "#b08968",
+    display: "grid",
+    placeItems: "center",
+    flex: "0 0 auto",
+  },
+  mediaLabel: {
+    display: "block",
+    color: "#1f2333",
+    fontSize: "14px",
+    fontWeight: 800,
+  },
+  mediaHint: {
+    display: "block",
+    color: "#7b8296",
+    fontSize: "12px",
+    lineHeight: 1.35,
+  },
+  uploadDropBox: {
+    position: "relative",
+    width: "100%",
+    borderRadius: "20px",
+    border: "1.5px dashed #cfd6e6",
+    background: "linear-gradient(180deg, #f8f9fd, #ffffff)",
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+    boxSizing: "border-box",
+    transition: "border-color .2s ease, background .2s ease, transform .2s ease",
+  },
+  uploadDropBoxCover: {
+    minHeight: "210px",
+  },
+  uploadDropBoxLogo: {
+    minHeight: "190px",
+  },
+  uploadDropBoxWithImage: {
+    borderStyle: "solid",
+    borderColor: "#e2e6f0",
+    background: "#f6f7fb",
+  },
+  uploadDropContent: {
+    display: "grid",
+    placeItems: "center",
+    gap: "9px",
+    color: "#687086",
+    textAlign: "center",
+    padding: "28px 18px",
+  },
+  uploadPlusIcon: {
+    width: "68px",
+    height: "68px",
+    borderRadius: "22px",
+    background: "#fff8f3",
+    color: "#b08968",
+    display: "grid",
+    placeItems: "center",
+    boxShadow: "0 12px 26px rgba(176, 137, 104, 0.16)",
+  },
+  uploadImageOverlay: {
+    position: "absolute",
+    inset: 0,
+    background: "linear-gradient(180deg, rgba(30,36,64,0.06), rgba(30,36,64,0.58))",
+    color: "#fff",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    opacity: 1,
+    textAlign: "center",
+    padding: "14px",
+  },
+  uploadPlusSmall: {
+    width: "46px",
+    height: "46px",
+    borderRadius: "16px",
+    background: "rgba(255,255,255,0.92)",
+    color: "#1e2440",
+    display: "grid",
+    placeItems: "center",
+  },
+  urlDivider: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    color: "#8a90a3",
+    fontSize: "12px",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: ".04em",
+  },
+  coverPreview: {
+    height: "150px",
+    borderRadius: "16px",
+    border: "1px dashed #d7dcea",
+    background: "#f6f7fb",
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+  },
+  logoPreview: {
+    height: "150px",
+    borderRadius: "16px",
+    border: "1px dashed #d7dcea",
+    background: "radial-gradient(circle at top, #ffffff, #f6f7fb)",
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+  },
+  coverPreviewImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  logoPreviewImage: {
+    width: "82%",
+    height: "82%",
+    objectFit: "contain",
+    display: "block",
+  },
+  emptyPreview: {
+    display: "grid",
+    placeItems: "center",
+    gap: "8px",
+    color: "#8a90a3",
+    fontSize: "13px",
+    fontWeight: 700,
+    textAlign: "center",
+  },
+  mediaInput: {
+    width: "100%",
+    height: "44px",
+    borderRadius: "13px",
+    border: "1px solid #dfe3ec",
+    padding: "0 12px",
+    outline: "none",
+    fontSize: "13px",
+    minWidth: 0,
+    boxSizing: "border-box",
+    background: "#fff",
+  },
+  appearanceCard: {
+    border: "1px solid #ececf3",
+    borderRadius: "20px",
+    background: "#fff",
+    padding: "16px",
+    display: "grid",
+    gap: "14px",
+    boxShadow: "0 10px 24px rgba(30, 36, 64, 0.05)",
+  },
+  appearanceHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+  },
+  appearanceIcon: {
+    width: "42px",
+    height: "42px",
+    borderRadius: "15px",
+    background: "#1e2440",
+    color: "#fff",
+    display: "grid",
+    placeItems: "center",
+    flex: "0 0 auto",
+  },
+  appearanceTitle: {
+    display: "block",
+    color: "#1f2333",
+    fontSize: "15px",
+  },
+  appearanceSubtitle: {
+    display: "block",
+    color: "#7b8296",
+    fontSize: "13px",
+    lineHeight: 1.4,
+  },
+  colorGrid: {
+    display: "grid",
+    gap: "12px",
+  },
+  colorCard: {
+    border: "1px solid #e7eaf2",
+    borderRadius: "16px",
+    padding: "12px",
+    background: "#fafbff",
+    display: "grid",
+    gap: "10px",
+    cursor: "pointer",
+  },
+  colorTopLine: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "8px",
+  },
+  colorName: {
+    color: "#29314d",
+    fontWeight: 800,
+    fontSize: "13px",
+  },
+  colorHex: {
+    color: "#7b8296",
+    fontWeight: 700,
+    fontSize: "12px",
+    textTransform: "uppercase",
+  },
+  colorControlRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  },
+  colorSwatch: {
+    width: "42px",
+    height: "42px",
+    borderRadius: "14px",
+    border: "1px solid rgba(0,0,0,0.08)",
+    boxShadow: "inset 0 0 0 3px rgba(255,255,255,0.65)",
+    flex: "0 0 auto",
+  },
+  colorPickerNative: {
+    width: "100%",
+    height: "42px",
+    border: "1px solid #dfe3ec",
+    borderRadius: "14px",
+    padding: "4px",
+    background: "#fff",
+    boxSizing: "border-box",
+    cursor: "pointer",
+  },
+  colorHint: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    color: "#7b8296",
+    fontSize: "12px",
+    lineHeight: 1.3,
+  },
+  galleryPreview: {
+    minHeight: "118px",
+    borderRadius: "20px",
+    padding: "16px",
+    overflow: "hidden",
+    position: "relative",
+  },
+  galleryPreviewOverlay: {
+    height: "100%",
+    minHeight: "86px",
+    borderRadius: "16px",
+    background: "rgba(255,255,255,0.16)",
+    border: "1px solid rgba(255,255,255,0.22)",
+    backdropFilter: "blur(10px)",
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    padding: "12px",
+    color: "#fff",
+  },
+  galleryPreviewLogoWrap: {
+    width: "62px",
+    height: "62px",
+    borderRadius: "20px",
+    background: "rgba(255,255,255,0.92)",
+    color: "#1e2440",
+    display: "grid",
+    placeItems: "center",
+    overflow: "hidden",
+    flex: "0 0 auto",
+  },
+  galleryPreviewLogo: {
+    width: "86%",
+    height: "86%",
+    objectFit: "contain",
+    display: "block",
+  },
+  galleryPreviewText: {
+    display: "grid",
+    gap: "4px",
+    minWidth: 0,
+  },
+  galleryPreviewBadge: {
+    width: "fit-content",
+    background: "rgba(255,255,255,0.18)",
+    border: "1px solid rgba(255,255,255,0.22)",
+    borderRadius: "999px",
+    padding: "4px 9px",
+    fontSize: "11px",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: ".04em",
   },
   field: {
     display: "grid",
